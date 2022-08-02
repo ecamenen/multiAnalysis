@@ -1,6 +1,6 @@
 library(devtools)
 
-name <- "packageStarter"
+name <- "multiAnalysis"
 # available::available(name)
 path <- paste0("~/bin/", name)
 if (!file.exists(path)) {
@@ -13,12 +13,11 @@ use_git(message = "Add packaging configuration files")
 use_github()
 use_description(
     fields = list(
-        Title = "",
+        Title = "Multi-omics data analysis for Auto-Inflammatory Diseases",
         `Authors@R` = c(
-            person("Etienne", "Camenen", email = "etienne.camenen@gmail.com", role = c("aut", "cre")) #,
-            #person("", "", role = "aut")
+            person("Etienne", "Camenen", email = "etienne.camenen@gmail.com", role = c("aut", "cre"))
         ),
-        Description = "",
+        Description = "Multi-omics data analysis for the ImmunAID project (H2020): identify potential biomarkers for Auto-Inflammatory Diseases (AID).",
         License = "GPL-3",
         Version = "0.1.0"
     )

@@ -4,8 +4,18 @@
 \name{packageStarter-package}
 \alias{packageStarter}
 \alias{packageStarter-package}
-\title{packageStarter:}
+\title{packageStarter: Multi-omics data analysis for Auto-Inflammatory Diseases}
 \description{
+Multi-omics data analysis for the ImmunAID project
+    (H2020): identify potential biomarkers for Auto-Inflammatory Diseases
+    (AID).
+}
+\seealso{
+Useful links:
+\itemize{
+  \item \url{https://github.com/ecamenen/multiAnalysis}
+  \item Report bugs at \url{https://github.com/ecamenen/multiAnalysis/issues}
+}
 
 }
 \author{

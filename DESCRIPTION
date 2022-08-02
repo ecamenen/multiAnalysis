@@ -1,12 +1,14 @@
-Package: packageStarter
-Title: 
+Package: multiAnalysis
+Title: Multi-omics data analysis for Auto-Inflammatory Diseases
 Version: 0.1.0
 Authors@R: 
     person(given = "Etienne",
            family = "Camenen",
            role = c("aut", "cre"),
            email = "etienne.camenen@gmail.com")
-Description: 
+Description: Multi-omics data analysis for the ImmunAID project
+    (H2020): identify potential biomarkers for Auto-Inflammatory Diseases
+    (AID).
 License: GPL-3
 Encoding: UTF-8
 LazyData: true
@@ -14,5 +16,5 @@ Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.1.1
 Imports: 
     magrittr
-URL: https://github.com/ecamenen/packageStarter
-BugReports: https://github.com/ecamenen/packageStarter/issues
+URL: https://github.com/ecamenen/multiAnalysis
+BugReports: https://github.com/ecamenen/multiAnalysis/issues
