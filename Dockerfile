@@ -16,12 +16,12 @@ RUN apt-get update --allow-releaseinfo-change -qq && \
 RUN apt-get install -y --no-install-recommends libglpk-dev libxt6
 ENV RPKGS BiocManager corrplot devtools factoextra FactoMineR ggplot2 ggpubr ggrepel golem knitr lintr markdown plotly rmarkdown rstatix styler testthat tidyverse visNetwork
 RUN Rscript -e "install.packages(commandArgs(TRUE))" ${RPKGS}
-RUN R -e "devtools::install_github('ecamenen/"${TOOL_NAME}"', ref = '"${TOOL_VERSION}"')"
 RUN Rscript -e "BiocManager::install('BiocCheck')"
 RUN Rscript -e 'BiocManager::install("mixOmics")'
+RUN R -e "devtools::install_github('ecamenen/"${TOOL_NAME}"', ref = '"${TOOL_VERSION}"')"
 RUN Rscript -e 'devtools::install_github("rgcca-factory/RGCCA")'
 RUN apt-get purge -y git g++ && \
 	apt-get autoremove --purge -y && \
 	apt-get clean && \
 	rm -rf /var/lib/{cache,log}/ /tmp/* /var/tmp/*
-COPY .. /home/rstudio
+COPY . /home/rstudio

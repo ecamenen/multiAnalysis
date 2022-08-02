@@ -4,4 +4,4 @@ TOOL_VERSION=$(Rscript -e "cat(desc::desc_get_field('Version'))")
 DOCKER_NAME="multi-analysis"
 DOCKER_VERSION="1.0.0"
 
-docker build -t ${DOCKER_NAME}:${DOCKER_VERSION} --build-arg TOOL_NAME=${TOOL_NAME} --build-arg TOOL_VERSION=${TOOL_VERSION} dev
+docker build -t ${DOCKER_NAME}:${DOCKER_VERSION} --build-arg TOOL_NAME=${TOOL_NAME} --build-arg TOOL_VERSION=${TOOL_VERSION} .
