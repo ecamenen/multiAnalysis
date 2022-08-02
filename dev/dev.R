@@ -21,7 +21,7 @@ style_pkg(
 lintr::lint_package()
 
 document()
-# build(path = ".")#, vignettes = FALSE)
+build(path = ".")#, vignettes = FALSE)
 install(upgrade = "never", build_vignettes = FALSE)
 install(upgrade = "never")
 build_vignettes()
