@@ -20,6 +20,7 @@ RUN Rscript -e "BiocManager::install('BiocCheck')"
 RUN Rscript -e 'BiocManager::install("mixOmics")'
 RUN R -e "devtools::install_github('ecamenen/"${TOOL_NAME}"', ref = '"${TOOL_VERSION}"')"
 RUN Rscript -e 'devtools::install_github("rgcca-factory/RGCCA")'
+RUN Rscript -e 'devtools::install_github("moldach/vapoRwave")'
 RUN apt-get purge -y git g++ && \
 	apt-get autoremove --purge -y && \
 	apt-get clean && \
