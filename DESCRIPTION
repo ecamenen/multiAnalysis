@@ -11,8 +11,11 @@ Description: Multi-omics data analysis for the ImmunAID project (H2020):
 License: GPL-3
 URL: https://github.com/ecamenen/multiAnalysis
 BugReports: https://github.com/ecamenen/multiAnalysis/issues
+Depends:
+    R (>= 2.10)
 Imports: 
     corrplot,
+    dplyr,
     factoextra,
     FactoMineR,
     ggplot2,
@@ -23,11 +26,14 @@ Imports:
     mixOmics,
     modelr,
     plotly,
+    RColorBrewer,
     RGCCA,
     rstatix,
+    stringr,
     tidyverse,
     visNetwork
 Encoding: UTF-8
-LazyData: true
+Language: en-US
+LazyData: false
 Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.1.1

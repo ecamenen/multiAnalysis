@@ -5,8 +5,8 @@ RGCCA:::load_libraries(
     c(
         "RColorBrewer",
         "RGCCA",
-        "tidyverse",
-        "vapoRwave"
+        "tidyverse"#,
+        #"vapoRwave"
     )
 )
 
@@ -40,8 +40,8 @@ plot_var_2D(
 plot_ind0 <- function(
     x,
     colors = c(
-       brewer.pal(n = 12, name = "Paired"),
-       vapoRwave:::vapoRwave_palette
+        brewer.pal(n = 12, name = "Paired")#,
+        #vapoRwave:::vapoRwave_palette
     ),
     no_overlap = TRUE,
     text = FALSE,
@@ -93,6 +93,9 @@ replace_parenthesis <- function(x) {
     str_replace_all(x, "\\(", "\\\\(") %>%
         str_replace_all("\\)", "\\\\)")
 }
+
+clinic_intersect$disease <- as.character(clinic_intersect$disease)
+
 tab_diseases <- table_occ(
     clinic_intersect,
     "disease",
@@ -110,18 +113,17 @@ tab_gender <- table_occ(
     )))
 )
 
-clinic_intersect$disease <- as.character(clinic_intersect$disease)
-clinic_intersect <- mutate(clinic_intersect,
+clinic_intersect <- mutate(
+    clinic_intersect,
     diseases = case_when(
         !str_detect(
-            disease, paste(replace_parenthesis(names(levels)), collapse = "|")
+            disease,
+            paste(replace_parenthesis(names(levels)), collapse = "|")
         ) ~ "Others",
         TRUE ~ disease
     )
 )
 
-plot_ind0("diseases", colors = colors)
-# c(pal_ucscgb()(7)[-2])
 colors <- c(
     rgb(255 / 255, 0 / 255, 0 / 255, 0.5),
     rgb(255 / 255, 204 / 255, 0 / 255, 0.5),
@@ -131,5 +133,9 @@ colors <- c(
     rgb(153 / 255, 153 / 255, 30 / 255, 0.5),
     rgb(0, 0, 0, 0.5)
 )
+# toRGB(c(pal_ucscgb()(7)[-2], "black"), 0.5)
+
+plot_ind0("diseases", colors = colors)
+
 
 # eval <- rgcca_cv_k(res, validation = "loo", detectCores())
