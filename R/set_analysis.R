@@ -28,4 +28,5 @@ clinic_intersect <- filter(
         paste0("^", rownames(blocks[[1]]), "$", collapse = "|")
     )
 )
-disease <- clinic_intersect$disease
+disease <- clinic_intersect$disease %>%
+    factor(., levels = unique(.))

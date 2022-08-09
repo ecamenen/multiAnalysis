@@ -25,6 +25,7 @@ Imports:
     magrittr,
     mixOmics,
     modelr,
+    NbClust,
     plotly,
     RColorBrewer,
     RGCCA,

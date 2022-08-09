@@ -5,7 +5,8 @@ libs <- c(
 )
 source(file.path(golem::get_golem_wd(), "R", "set_analysis.R"))
 
-res_pca <- PCA(blocks[[1]], scale.unit = TRUE, ncp = 3, grap = FALSE)
+res_pca <- PCA(blocks[[1]], scale.unit = TRUE, ncp = 3, grap = FALSE) %>%
+    suppressWarnings()
 tibble(res_pca$eig)
 fviz_eig(res_pca, addlabels = TRUE, ylim = c(0, 50))
 fviz_pca_var(
