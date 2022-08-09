@@ -1,16 +1,7 @@
-# path <- "~/bin/MultiOmics4ImmunAID/data/"
-path <- file.path(golem::get_golem_wd(), "data")
-load(file.path(path, paste0("blocks", ".rda")))
-RGCCA:::load_libraries(
-    c(
-        "RColorBrewer",
-        "RGCCA",
-        "tidyverse"#,
-        #"vapoRwave"
-    )
-)
+block_name <- "blocks"
+libs <- c("RGCCA")
+source(file.path(golem::get_golem_wd(), "R", "set_analysis.R"))
 
-blocks <- blocks
 n <- length(blocks)
 res <- rgcca(blocks, ncomp = 2, response = n) # tau = "optimal"
 plot_ave(res)
@@ -47,6 +38,8 @@ plot_ind0 <- function(
     text = FALSE,
     i_block = n
 ) {
+    if (text)
+        no_overlap <- FALSE
     plot_ind(
         res,
         i_block = i_block,
@@ -60,16 +53,6 @@ plot_ind0 <- function(
     )
 }
 
-load(file.path(path, paste0("clinic", ".rda")))
-clinic_intersect <- filter(
-    clinic,
-    str_detect(
-        immun_aid_identifier,
-        paste0("^", rownames(blocks[[1]]), "$", collapse = "|")
-    )
-)
-
-disease <- clinic_intersect$disease
 plot_ind0("disease", text = FALSE)
 
 table_occ <- function(x, i, y) {
