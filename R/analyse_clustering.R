@@ -1,9 +1,13 @@
 # Environment
 libs <- c(
+    "FactoMineR",
+    "factoextra",
     "cluster",
     "NbClust",
     "dendextend",
-    "heatmaply"
+    "heatmaply",
+    "pheatmap",
+    "pvclust"
 )
 block_name <- "blocks_clinic"
 hc_method <- "ward.D2"
@@ -85,10 +89,15 @@ res_clus0 <- res_scaled0 %>%
     hclust(method = hc_method)
 table(cutree(res_clus0, k = k), disease)
 
-res_clus1 <-res_scaled %>%
+res_clus1 <- res_scaled %>%
     t() %>%
-    get_dist(stand = FALSE, method = hc_metric) %>%
-    hclust(method = hc_method)
+    eclust(
+        "hclust",
+        hc_method = hc_method,
+        stand = FALSE,
+        hc_metric = hc_metric,
+        k = k
+    )
 
 # Visualisation
 
@@ -124,33 +133,61 @@ colors_var <- c("yellow", "red")
 mycols <- c("#2E9FDF", "#00AFBB", "#E7B800", "#FC4E07")
 row_dend <- res_clus %>%
     as.dendrogram() %>%
-    set("branches_lwd", .1) %>%
-    set("branches_k_color", mycols[1:k], k = k)
+    set("branches_k_color", colors_var[seq(k)], k = k) %>%
+    set("branches_lwd", 1) %>%
+    ladderize
 
 col_dend <- res_clus1 %>%
     as.dendrogram() %>%
-    set("branches_lwd", .1) %>%
-    set("branches_k_color", mycols[1:k], k = k)
+    set("branches_k_color", colors_var[seq(k)], k = k) %>%
+    set("branches_lwd", 1) %>%
+    ladderize
 
 heatmaply(
-    res_scaled,
-    k_col = k,
-    k_row = k,
+    res_scaled_na,
+    # k_col = k,
+    # k_row = k,
     colors = colors_ind,
+    na.value = "black",
     distfun = hc_metric,
     hclust_method = hc_method,
-    # Rowv = row_dend,
-    # Colv = col_dend,
+    Rowv = row_dend,
+    Colv = col_dend,
     # row_dend_left = TRUE
-    seriate = "none",
+    seriate = "mean",
     # col_side_colors = group_code,
-    row_side_colors = data.frame("Disease" = factor(disease, labels = c("Still", "Control")), check.names = FALSE),
+    row_side_colors = data.frame("Disease" = factor(disease, labels = c("Still", "Control"))),
     row_side_palette = c("Still" = colors_var[1], "Control" = colors_var[2]),
     # RowSideColors = factor(disease, labels = c("Still", "Control")),
     plot_method = "plotly",
+    colorbar_xpos = 1.025,
+    na.rm = FALSE,
+    heatmap_layers = list(theme(axis.ticks = element_blank()))
     # key.title = "Disease"
-    # side_color_layers
+    # side_color_layers,
 )
+
+row_dend0 <- res_scaled %>%
+    get_dist(stand = FALSE, method = hc_metric) %>%
+    hclust(method = hc_method)
+
+col_dend0 <- res_scaled %>%
+    t() %>%
+    get_dist(stand = FALSE, method = hc_metric) %>%
+    hclust(method = hc_method)
+
+temp <- data.frame(Disease = factor(disease, labels = c("Still", "Control")))
+rownames(temp) <- rownames(res_scaled_na)
+pheatmap(
+    res_scaled_na,
+         colors = colors_ind,
+         annotation_row = temp,
+         # annotation_col = my_sample_col,
+         cluster_rows = row_dend0,
+         cluster_cols = col_dend0,
+         cutree_rows = 2,
+         cutree_cols = 2
+         )
 
 # clinic_intersect %>% filter(str_detect(disease, "control")) %>%
 #     arrange(immun_aid_identifier)

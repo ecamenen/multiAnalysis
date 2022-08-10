@@ -12,3 +12,7 @@
 #' @rdname blocks
 #' @usage data(clinic)
 "clinic"
+
+#' @rdname blocks
+#' @usage data(blocks_clinic)
+"blocks_clinic"
