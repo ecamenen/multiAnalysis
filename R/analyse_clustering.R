@@ -56,7 +56,6 @@ fviz_nbclust(
 )
 
 # Distance
-
 res_dist <- get_dist(res_scaled, stand = FALSE, method = hc_metric)
 
 fviz_dist(
@@ -74,9 +73,9 @@ fviz_dist(
 # res_clus$data.clust$clust
 # res_clus$desc.var$test.chi2
 
-res_clus <- hclust(res_dist, method = hc_method)
-group <- cutree(res_clus, k = k)
-table(group, disease)
+# group <- hclust(res_dist, method = hc_method) %>%
+#     cutree(k = k)
+# table(group, disease)
 
 res_clus <- eclust(
     res_scaled,
@@ -93,7 +92,7 @@ res_clus0 <- res_scaled0 %>%
     hclust(method = hc_method)
 table(cutree(res_clus0, k = k), disease)
 
-res_clus1 <- res_scaled %>%
+res_clus_var <- res_scaled %>%
     t() %>%
     eclust(
         "hclust",
@@ -108,7 +107,7 @@ res_clus1 <- res_scaled %>%
 row_annotation <- data.frame(
     Disease = factor(disease, labels = c("Still", "Control"))
 )
-rownames(row_annotation) <- rownames(res_scaled_na)
+rownames(row_annotation) <- rownames(res_scaled)
 row_col <- c("Still" = colors_var[1], "Control" = colors_var[2])
 row_col0 <- as.character(factor(disease, labels = colors_var[seq(k)]))
 
@@ -128,27 +127,8 @@ res0 <- pvclust(
     use.cor = "pairwise.complete.obs",
     nboot = 100,
     parallel = TRUE
-)
-res10 <- res0 %>%
-    as.dendrogram() %>%
-    set("branches_k_color", value = colors_var[seq(k)], k = k) %>%
-    set("labels_col", value = colors_var[seq(k)], k = k) %>%
-    set("branches_lwd", 2)
-plot(res10, ylab = "Cophenetic distance", main = "Dendrogram")
-text(
-    res0,
-    float = .02,
-    col = c(au = "gray", bp = "gray", edge = NULL),
-    cex = 0.75
-)
-# abline(
-#     h = mean(heights_per_k.dendrogram(res10)[k:(k + 1)]),
-#     col = "gray",
-#     lwd = 2
-# )
-rect.dendrogram(res10, k = k, border = 8, lty = 3, lwd = 2)
-pvrect(res0, border = "gray", lty = 3, lwd = 2)
-colored_bars(colors = row_col0, dend = res10, rowLabels = "Disease")
+) %>% suppressWarnings()
+plot_dendrogram(res0, k = k)
 print(res0, digits = 3)
 pvpick(res0)
 
@@ -169,20 +149,8 @@ fviz_silhouette(res_clus, palette = colors_var) +
     theme(axis.text.x = element_text(angle = 90))
 
 # Heatmap
-
-colors_var <- c("yellow", "red")
-mycols <- c("#2E9FDF", "#00AFBB", "#E7B800", "#FC4E07")
-row_dend <- res_clus %>%
-    as.dendrogram() %>%
-    set("branches_k_color", colors_var[seq(k)], k = k) %>%
-    set("branches_lwd", 1) %>%
-    sort()
-
-col_dend <- res_clus1 %>%
-    as.dendrogram() %>%
-    set("branches_k_color", colors_var[seq(k)], k = k) %>%
-    set("branches_lwd", 1) %>%
-    sort()
+row_dend <- color_dendrogram(res_clus, k = k) %>% sort()
+col_dend <- color_dendrogram(res_clus_var, k = k) %>% sort()
 
 heatmaply(
     res_scaled_na,
@@ -190,23 +158,22 @@ heatmaply(
     # k_row = k,
     colors = colors_ind,
     na.value = "black",
-    distfun = hc_metric,
-    hclust_method = hc_method,
+    # distfun = hc_metric,
+    # hclust_method = hc_method,
     Rowv = row_dend,
     Colv = col_dend,
     # row_dend_left = TRUE
-    seriate = "mean",
+    # seriate = "mean",
     # col_side_colors = group_code,
     row_side_colors = row_annotation,
     row_side_palette = row_col,
     # RowSideColors = factor(disease, labels = c("Still", "Control")),
     plot_method = "plotly",
     colorbar_xpos = 1.025,
-    na.rm = FALSE,
-    heatmap_layers = list(theme(axis.ticks = element_blank()))
+    # na.rm = FALSE,
     # key.title = "Disease"
     # side_color_layers,
-)
+) %>% layout(xaxis = list(ticklen = 0), yaxis2 = list(ticklen = 0))
 
 row_dend0 <- res_scaled %>%
     get_dist(stand = FALSE, method = hc_metric) %>%
@@ -216,7 +183,6 @@ col_dend0 <- res_scaled %>%
     t() %>%
     get_dist(stand = FALSE, method = hc_metric) %>%
     hclust(method = hc_method)
-
 
 pheatmap(
     res_scaled_na,

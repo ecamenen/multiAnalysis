@@ -23,6 +23,7 @@ Imports:
     ggpubr,
     ggrepel,
     golem,
+    graphics,
     heatmaply,
     magrittr,
     mixOmics,
@@ -34,6 +35,7 @@ Imports:
     RColorBrewer,
     RGCCA,
     rstatix,
+    stats,
     stringr,
     tidyverse,
     visNetwork
