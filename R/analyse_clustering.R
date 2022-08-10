@@ -14,7 +14,7 @@ hc_method <- "ward.D2"
 hc_metric <- "pearson"
 hc_index <- "silhouette"
 k <- 2
-colors_var <- c("indianred1", "darkseagreen")
+colors_var <- c("indianred1", "darkseagreen", "steelblue")
 colors_ind <- c("blue", "white", "#cd5b45")
 source(file.path(golem::get_golem_wd(), "R", "set_analysis.R"))
 
@@ -61,7 +61,11 @@ res_dist <- get_dist(res_scaled, stand = FALSE, method = hc_metric)
 
 fviz_dist(
     res_dist,
-    gradient = list(low = colors_ind[1], mid = colors_ind[2], high = colors_ind[3])
+    gradient = list(
+        low = colors_ind[1],
+        mid = colors_ind[2],
+        high = colors_ind[3]
+    )
 )
 
 # Clustering
@@ -101,6 +105,13 @@ res_clus1 <- res_scaled %>%
 
 # Visualisation
 
+row_annotation <- data.frame(
+    Disease = factor(disease, labels = c("Still", "Control"))
+)
+rownames(row_annotation) <- rownames(res_scaled_na)
+row_col <- c("Still" = colors_var[1], "Control" = colors_var[2])
+row_col0 <- as.character(factor(disease, labels = colors_var[seq(k)]))
+
 fviz_dend(
     res_clus,
     k = k,
@@ -109,6 +120,37 @@ fviz_dend(
     k_colors = colors_var[seq(k)],
     color_labels_by_k = TRUE,
 )
+
+res0 <- pvclust(
+    t(res_scaled),
+    method.hclust = hc_method,
+    method.dist = "correlation",
+    use.cor = "pairwise.complete.obs",
+    nboot = 100,
+    parallel = TRUE
+)
+res10 <- res0 %>%
+    as.dendrogram() %>%
+    set("branches_k_color", value = colors_var[seq(k)], k = k) %>%
+    set("labels_col", value = colors_var[seq(k)], k = k) %>%
+    set("branches_lwd", 2)
+plot(res10, ylab = "Cophenetic distance", main = "Dendrogram")
+text(
+    res0,
+    float = .02,
+    col = c(au = "gray", bp = "gray", edge = NULL),
+    cex = 0.75
+)
+# abline(
+#     h = mean(heights_per_k.dendrogram(res10)[k:(k + 1)]),
+#     col = "gray",
+#     lwd = 2
+# )
+rect.dendrogram(res10, k = k, border = 8, lty = 3, lwd = 2)
+pvrect(res0, border = "gray", lty = 3, lwd = 2)
+colored_bars(colors = row_col0, dend = res10, rowLabels = "Disease")
+print(res0, digits = 3)
+pvpick(res0)
 
 # plot(res_clus, choice = "3D.map")
 
@@ -127,7 +169,6 @@ fviz_silhouette(res_clus, palette = colors_var) +
     theme(axis.text.x = element_text(angle = 90))
 
 # Heatmap
-# gradient_col <- ggplot2::scale_color_gradientn(colours = colors, na.value = "black")
 
 colors_var <- c("yellow", "red")
 mycols <- c("#2E9FDF", "#00AFBB", "#E7B800", "#FC4E07")
@@ -135,13 +176,13 @@ row_dend <- res_clus %>%
     as.dendrogram() %>%
     set("branches_k_color", colors_var[seq(k)], k = k) %>%
     set("branches_lwd", 1) %>%
-    ladderize
+    sort()
 
 col_dend <- res_clus1 %>%
     as.dendrogram() %>%
     set("branches_k_color", colors_var[seq(k)], k = k) %>%
     set("branches_lwd", 1) %>%
-    ladderize
+    sort()
 
 heatmaply(
     res_scaled_na,
@@ -156,8 +197,8 @@ heatmaply(
     # row_dend_left = TRUE
     seriate = "mean",
     # col_side_colors = group_code,
-    row_side_colors = data.frame("Disease" = factor(disease, labels = c("Still", "Control"))),
-    row_side_palette = c("Still" = colors_var[1], "Control" = colors_var[2]),
+    row_side_colors = row_annotation,
+    row_side_palette = row_col,
     # RowSideColors = factor(disease, labels = c("Still", "Control")),
     plot_method = "plotly",
     colorbar_xpos = 1.025,
@@ -176,18 +217,32 @@ col_dend0 <- res_scaled %>%
     get_dist(stand = FALSE, method = hc_metric) %>%
     hclust(method = hc_method)
 
-temp <- data.frame(Disease = factor(disease, labels = c("Still", "Control")))
-rownames(temp) <- rownames(res_scaled_na)
+
 pheatmap(
     res_scaled_na,
-         colors = colors_ind,
-         annotation_row = temp,
-         # annotation_col = my_sample_col,
-         cluster_rows = row_dend0,
-         cluster_cols = col_dend0,
-         cutree_rows = 2,
-         cutree_cols = 2
-         )
+    color =  colorRampPalette(colors_ind)(100),
+    angle_col = 315,
+    na_col = "black",
+    annotation_row = row_annotation,
+    border_color = NA,
+    annotation_colors = list(Disease = row_col),
+    # annotation_col = my_sample_col,
+    cluster_rows = row_dend0,
+    cluster_cols = col_dend0,
+    cutree_rows = k,
+    cutree_cols = k
+)
+
+heatmap(
+    as.matrix(res_scaled_na),
+    col = colorRampPalette(colors_ind)(100),
+    scale = "none",
+    na.rm = FALSE,
+    # na_col = "black",
+    RowSideColors = row_col0,
+    Rowv = row_dend,
+    Colv = col_dend
+)
 
 # clinic_intersect %>% filter(str_detect(disease, "control")) %>%
 #     arrange(immun_aid_identifier)
