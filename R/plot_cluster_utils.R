@@ -5,7 +5,8 @@ setGraphicBasic <- function() {
 
 #' @export
 plot_dendrogram <- function(x, k) {
-    x0 <- color_dendrogram(x, k = k)
+    x0 <- color_dendrogram(x, k = k) %>%
+        set("labels_cex", 0.8)
     plot(
         x0,
         ylab = "Cophenetic distance",

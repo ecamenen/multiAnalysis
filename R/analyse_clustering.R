@@ -2,6 +2,7 @@
 libs <- c(
     "FactoMineR",
     "factoextra",
+    "RColorBrewer",
     "cluster",
     "NbClust",
     "dendextend",
@@ -14,12 +15,23 @@ hc_method <- "ward.D2"
 hc_metric <- "pearson"
 hc_index <- "silhouette"
 k <- 2
-colors_var <- c("indianred1", "darkseagreen", "steelblue")
+# colors_var <- c("indianred1", "darkseagreen", "steelblue")
+colors_var <- c(
+    brewer.pal(n = 9, name = "Pastel1"),
+    brewer.pal(n = 9, name = "Set1")
+)
 colors_ind <- c("blue", "white", "#cd5b45")
 source(file.path(golem::get_golem_wd(), "R", "set_analysis.R"))
+# names_levels <- c("Still", "Control")
+
+disease <- clinic_intersect$disease %>%
+    factor(., levels = unique(.))
+names_levels <- str_replace(levels(disease), " \\(.+\\)", "")
+row_annotation <- data.frame(
+    Disease = factor(disease, labels = names_levels)
+)
 
 # Data preparation
-
 res_scaled_na0 <- scale(blocks[[1]])
 res_scaled0 <- res_scaled_na0
 res_scaled0[is.na(res_scaled0)] <- 0
@@ -85,12 +97,12 @@ res_clus <- eclust(
     hc_metric = hc_metric,
     k = k
 )
-table(res_clus$cluster, disease)
+table(res_clus$cluster, t(row_annotation))
 
 res_clus0 <- res_scaled0 %>%
     get_dist(stand = FALSE, method = hc_metric) %>%
     hclust(method = hc_method)
-table(cutree(res_clus0, k = k), disease)
+table(cutree(res_clus0, k = k), t(row_annotation))
 
 res_clus_var <- res_scaled %>%
     t() %>%
@@ -103,13 +115,11 @@ res_clus_var <- res_scaled %>%
     )
 
 # Visualisation
-
-row_annotation <- data.frame(
-    Disease = factor(disease, labels = c("Still", "Control"))
-)
 rownames(row_annotation) <- rownames(res_scaled)
-row_col <- c("Still" = colors_var[1], "Control" = colors_var[2])
-row_col0 <- as.character(factor(disease, labels = colors_var[seq(k)]))
+n <- seq(length(levels(disease)))
+row_col <- colors_var[n]
+names(row_col) <- names_levels
+row_col0 <- as.character(factor(disease, labels = colors_var[seq(n)]))
 
 fviz_dend(
     res_clus,
@@ -125,12 +135,12 @@ res0 <- pvclust(
     method.hclust = hc_method,
     method.dist = "correlation",
     use.cor = "pairwise.complete.obs",
-    nboot = 100,
+    nboot = 1000,
     parallel = TRUE
 ) %>% suppressWarnings()
 plot_dendrogram(res0, k = k)
-print(res0, digits = 3)
-pvpick(res0)
+# print(res0, digits = 3)
+# pvpick(res0)
 
 # plot(res_clus, choice = "3D.map")
 
