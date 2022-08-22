@@ -24,6 +24,10 @@ colors_ind <- c("blue", "white", "#cd5b45")
 source(file.path(golem::get_golem_wd(), "R", "set_analysis.R"))
 # names_levels <- c("Still", "Control")
 
+to_remove <- c("1004", "1001", "1002")
+i_row <- which(rownames(blocks[[1]]) %in% to_remove)
+blocks[[1]] <- blocks[[1]][-i_row, ]
+clinic_intersect <- clinic_intersect[-i_row, ]
 disease <- clinic_intersect$disease %>%
     factor(., levels = unique(.))
 names_levels <- str_replace(levels(disease), " \\(.+\\)", "")
@@ -154,9 +158,25 @@ fviz_cluster(
     ellipse.type = "norm"
 ) + theme_classic()
 
-fviz_silhouette(res_clus, palette = colors_var) +
+p <- fviz_silhouette(res_clus, palette = rev(colors_var[c(1, 3)])) +
     theme_classic() +
     theme(axis.text.x = element_text(angle = 90))
+p$layers[[2]]$aes_params$colour <- "gray"
+p
+
+# dl <- dendlist(
+#     color_dendrogram(d1, 2),
+#     color_dendrogram(d2, 2),
+# )
+# tanglegram(
+#     dl,
+#     common_subtrees_color_lines = FALSE,
+#     highlight_branches_lwd = FALSE,
+#     highlight_distinct_edges = FALSE,
+#     # k_branches = 2,
+#     # k_labels = 2,
+#     lwd = 2
+# )
 
 # Heatmap
 row_dend <- color_dendrogram(res_clus, k = k) %>% sort()
@@ -175,8 +195,8 @@ heatmaply(
     # row_dend_left = TRUE
     # seriate = "mean",
     # col_side_colors = group_code,
-    row_side_colors = row_annotation,
-    row_side_palette = row_col,
+    # row_side_colors = row_annotation,
+    # row_side_palette = row_col,
     # RowSideColors = factor(disease, labels = c("Still", "Control")),
     plot_method = "plotly",
     colorbar_xpos = 1.025,
@@ -199,9 +219,9 @@ pheatmap(
     color =  colorRampPalette(colors_ind)(100),
     angle_col = 315,
     na_col = "black",
-    annotation_row = row_annotation,
+    # annotation_row = row_annotation,
     border_color = NA,
-    annotation_colors = list(Disease = row_col),
+    # annotation_colors = list(Disease = row_col),
     # annotation_col = my_sample_col,
     cluster_rows = row_dend0,
     cluster_cols = col_dend0,
