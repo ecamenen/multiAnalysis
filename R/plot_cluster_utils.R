@@ -39,10 +39,39 @@ plot_dendrogram <- function(x, k) {
 color_dendrogram <- function(
     x,
     k,
-    colors_var = c("indianred1", "darkseagreen", "steelblue")
+    colors = c("indianred1", "darkseagreen", "steelblue")
 ) {
     as.dendrogram(x) %>%
-        set("branches_k_color", value = colors_var[seq(k)], k = k) %>%
-        set("labels_col", value = colors_var[seq(k)], k = k) %>%
+        set("branches_k_color", value = colors[seq(k)], k = k) %>%
+        set("labels_col", value = colors[seq(k)], k = k) %>%
         set("branches_lwd", 2)
+}
+
+#' @export
+plot_silhouette <- function(x, colors = c("indianred1", "darkseagreen", "steelblue")) {
+    p <- fviz_silhouette(res_clus, palette = colors) +
+        theme_classic() +
+        theme(axis.text.x = element_text(angle = 90))
+    p$layers[[2]]$aes_params$colour <- "gray"
+    p
+}
+
+#' @export
+get_clusters <- function(x, k) {
+    res <- get_dist(x, stand = FALSE, method = "pearson") %>%
+        hclust(method = "ward.D2") %>%
+        cutree(k = k)
+    list(cluster = res)
+}
+
+save_tiff <- function(f, filename = "violinplot_clin.tiff") {
+    tiff(
+        filename,
+        units = "px",
+        width = 4000,
+        height = 2000,
+        res = 300
+    )
+    f
+    dev.off()
 }

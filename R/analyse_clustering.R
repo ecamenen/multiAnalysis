@@ -15,22 +15,15 @@ hc_method <- "ward.D2"
 hc_metric <- "pearson"
 hc_index <- "silhouette"
 k <- 2
-# colors_var <- c("indianred1", "darkseagreen", "steelblue")
-colors_var <- c(
-    brewer.pal(n = 9, name = "Pastel1"),
-    brewer.pal(n = 9, name = "Set1")
-)
-colors_ind <- c("blue", "white", "#cd5b45")
+n_boot <- 1000
 source(file.path(golem::get_golem_wd(), "R", "set_analysis.R"))
-# names_levels <- c("Still", "Control")
+source(file.path(golem::get_golem_wd(), "R", "plot_cluster_utils.R"))
+source(file.path(golem::get_golem_wd(), "R", "cluster_utils.R"))
+MAX_CLUSTERS <- 6
+colPers <- function(x) colors_var[seq(x)]
 
-to_remove <- c("1004", "1001", "1002")
-i_row <- which(rownames(blocks[[1]]) %in% to_remove)
-blocks[[1]] <- blocks[[1]][-i_row, ]
-clinic_intersect <- clinic_intersect[-i_row, ]
-disease <- clinic_intersect$disease %>%
-    factor(., levels = unique(.))
 names_levels <- str_replace(levels(disease), " \\(.+\\)", "")
+# names_levels <- c("Still", "Control")
 row_annotation <- data.frame(
     Disease = factor(disease, labels = names_levels)
 )
@@ -65,11 +58,18 @@ res.nbclust <- NbClust(
 
 # fviz_nbclust(res.nbclust)
 
-fviz_nbclust(
+# fviz_nbclust(
+#     res_scaled,
+#     get_clusters,
+#     method = hc_index
+# )
+(gaps <- clusGap(
     res_scaled,
-    hcut,
-    method = hc_index
-)
+    FUN = get_clusters,
+    K.max = 6,
+    B = n_boot
+))
+fviz_gap_stat(gaps, maxSE = list(method = "Tibs2001SEmax", SE.factor = 1))
 
 # Distance
 res_dist <- get_dist(res_scaled, stand = FALSE, method = hc_metric)
@@ -139,14 +139,18 @@ res0 <- pvclust(
     method.hclust = hc_method,
     method.dist = "correlation",
     use.cor = "pairwise.complete.obs",
-    nboot = 1000,
+    nboot = n_boot,
     parallel = TRUE
 ) %>% suppressWarnings()
 plot_dendrogram(res0, k = k)
+# save_tiff(plot_dendrogram(res0, k = k), filename = "clust_tot.temp.tiff")
+
 # print(res0, digits = 3)
 # pvpick(res0)
 
 # plot(res_clus, choice = "3D.map")
+
+# plotDendrogram(2, row_dend0, res_scaled, MAX_CLUSTERS, cls[[k-1]])
 
 fviz_cluster(
     res_clus,
@@ -158,11 +162,8 @@ fviz_cluster(
     ellipse.type = "norm"
 ) + theme_classic()
 
-p <- fviz_silhouette(res_clus, palette = rev(colors_var[c(1, 3)])) +
-    theme_classic() +
-    theme(axis.text.x = element_text(angle = 90))
-p$layers[[2]]$aes_params$colour <- "gray"
-p
+# plot_silhouette(res_clus, colors_var[k:1])
+
 
 # dl <- dendlist(
 #     color_dendrogram(d1, 2),
@@ -195,13 +196,13 @@ heatmaply(
     # row_dend_left = TRUE
     # seriate = "mean",
     # col_side_colors = group_code,
-    # row_side_colors = row_annotation,
-    # row_side_palette = row_col,
-    # RowSideColors = factor(disease, labels = c("Still", "Control")),
+    row_side_colors = row_annotation,
+    row_side_palette = row_col,
+    RowSideColors = factor(disease, labels = names_levels),
     plot_method = "plotly",
     colorbar_xpos = 1.025,
     # na.rm = FALSE,
-    # key.title = "Disease"
+    key.title = "Disease"
     # side_color_layers,
 ) %>% layout(xaxis = list(ticklen = 0), yaxis2 = list(ticklen = 0))
 
@@ -219,9 +220,9 @@ pheatmap(
     color =  colorRampPalette(colors_ind)(100),
     angle_col = 315,
     na_col = "black",
-    # annotation_row = row_annotation,
+    annotation_row = row_annotation,
     border_color = NA,
-    # annotation_colors = list(Disease = row_col),
+    annotation_colors = list(Disease = row_col),
     # annotation_col = my_sample_col,
     cluster_rows = row_dend0,
     cluster_cols = col_dend0,
@@ -242,3 +243,25 @@ heatmap(
 
 # clinic_intersect %>% filter(str_detect(disease, "control")) %>%
 #     arrange(immun_aid_identifier)
+
+# Quality
+plotGapPerPart(gaps, MAX_CLUSTERS)
+plotFusionLevels(MAX_CLUSTERS, row_dend0)
+cls <- getClusterPerPart(MAX_CLUSTERS, row_dend0)
+sils <- getSilhouettePerPart(res_scaled, cls, res_dist)
+plotSilhouettePerPart(getMeanSilhouettePerPart(sils))
+plotSilhouette(sils[[k-1]]); abline(v = 0.165, col = "red", lwd = 2, lty = 1)
+between <- getRelativeBetweenPerPart(MAX_CLUSTERS, res_scaled, cls)
+plotBetweenDiff(getBetweenDifferences(between))
+
+# Variable contribution
+# 100 * getCtrVar(2, cls[[k-1]], res_scaled)
+(ctr <- getDiscriminantVariables(2, cls[[k-1]], res_scaled, 20))
+centr <- getDistPerVariable0(clinic_intersect[, colnames(blocks[[1]])], cls[[k-1]])
+centr[rownames(ctr[seq(4), ]), ]
+
+(res <- sapply(colnames(temp), function(i) t.test(temp[i_rows[[1]], i], temp[i_rows[[2]], i])$p.value) %>% sort())
+p.adjust(res)
+
+# Outputs
+write_tsv(as.data.frame(cls[[1]]), "clusters.temp.tsv")
