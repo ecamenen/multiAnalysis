@@ -258,23 +258,21 @@ plotBetweenDiff(getBetweenDifferences(between))
 # Variable contribution
 # 100 * getCtrVar(2, cls[[k-1]], res_scaled)
 ctr <- getDiscriminantVariables(2, cls[[k-1]], res_scaled, 20)
+(ggplot(ctr, aes(order, discr_var)) +
+    geom_bar(stat = "identity") +
+    coord_flip() +
+    scale_x_continuous(breaks = ctr$order, labels = rownames(ctr))
+) %>% theme_histo(0)
 round(ctr[, 1, drop = FALSE], 2)
-dat <- as.data.frame(clinic_intersect[, colnames(blocks[[1]])])
+
 cl <-  cls[[k-1]]
-centr <- getDistPerVariable0(dat, cl)
 n <- 3
-centr <- round(centr[rownames(ctr[seq(n), ]), ], 2)
+dat <- as.data.frame(clinic_intersect[, colnames(blocks[[1]])]) %>%
+    cbind(cl = as.character(cl))
+stats <- calculate_test(dat)
+plot_mean_test(dat, "physician_global_assessment", stats)
 
-dat0 <- cbind(dat, cl = as.character(cl))
-(var <- sapply(colnames(dat), function(i) wilcox.test(as.formula(paste0(i, " ~ cl")), dat0)$p.value) %>% sort())
-var <- (var * n)[seq(n)]
-res <- data.frame(centr, var) %>% add_significance("var")
-res$var <- format(var, scientific = TRUE, digits = 2)
-
-stats <- calculate_test(dat0)
-plot_mean_test(dat0, "physician_global_assessment", stats)
-
-(descr <- pivot_longer(dat0, !cl) %>%
+(descr <- pivot_longer(dat, !cl) %>%
     group_by(name, cl) %>%
     summarise(
         mean = mean(value, na.rm = TRUE),
@@ -290,7 +288,7 @@ stats <- stats %>% dplyr::select(all_of(c("name", "p", "p.signif")))
 tot <- Reduce(left_join, list(ctr2, descr, stats)) %>% arrange(p)
 tot$p <- format(tot$p * 3, scientific = TRUE, digits = 2)
 arrange(tot, desc(ctr)) %>%
-    slice(seq(3)) %>%
+    slice(seq(n)) %>%
     dplyr::select(-c(starts_with("n_"), contains("sd_")))
 
 # Outputs
