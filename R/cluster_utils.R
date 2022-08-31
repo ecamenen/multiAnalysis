@@ -916,9 +916,9 @@ plotInertiaPca = function (pca, d, nf=4){
 getDistPerVariable0 = function(d, cl) {
   nb_cl = length(levels(as.factor(cl)))
   i_rows <- sapply(seq(nb_cl), function(i)
-    which(cls[[k - 1]] == i))
+    which(cl == i))
   sapply(seq(nb_cl), function(i)
-    apply(temp[i_rows[[i]],], 2, function(j)
+    apply(d[i_rows[[i]],], 2, function(j)
       mean(j, na.rm = TRUE)))
 }
 #For a given partition (cl) and each variables (dataset columns)

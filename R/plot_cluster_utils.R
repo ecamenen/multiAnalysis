@@ -4,8 +4,12 @@ setGraphicBasic <- function() {
 }
 
 #' @export
-plot_dendrogram <- function(x, k) {
-    x0 <- color_dendrogram(x, k = k) %>%
+plot_dendrogram <- function(
+    x,
+    k,
+    color = c("indianred1", "darkseagreen", "steelblue")
+) {
+    x0 <- color_dendrogram(x, k = k, color = color) %>%
         set("labels_cex", 0.8)
     plot(
         x0,
@@ -49,7 +53,7 @@ color_dendrogram <- function(
 
 #' @export
 plot_silhouette <- function(x, colors = c("indianred1", "darkseagreen", "steelblue")) {
-    p <- fviz_silhouette(res_clus, palette = colors) +
+    p <- fviz_silhouette(x, palette = colors, ylim = c(min(x[, 3]), (max(x[, 3]) + 0.1))) +
         theme_classic() +
         theme(axis.text.x = element_text(angle = 90))
     p$layers[[2]]$aes_params$colour <- "gray"
@@ -74,4 +78,36 @@ save_tiff <- function(f, filename = "violinplot_clin.tiff") {
     )
     f
     dev.off()
+}
+
+calculate_test <- function(x) {
+    df <- pivot_longer(x, !cl) %>%
+        group_by(name) %>%
+        wilcox_test(value ~ cl) %>%
+        add_significance()
+    return(df)
+}
+
+plot_mean_test <- function(x, i, stats, color = colors_var[c(12, 14)]) {
+    temp <- data.frame(
+        var = as.data.frame(x[, i])[, 1],
+        cl = factor(x$cl, labels = paste("Cluster", seq(2)))
+    )
+    stats <- stats %>% filter(name == i) %>% add_xy_position(x = "cl")
+    stats$y.position <- max(temp[, 1], na.rm = TRUE) + 1
+    stats$p <- format(stats$p, scientific = TRUE, digits = 2)
+    ggbetweenstats(
+        temp,
+        cl,
+        var,
+        ggtheme = theme_classic(),
+        xlab = "",
+        ylab = ""
+    ) +
+        theme(
+            axis.ticks.x = element_blank(),
+            axis.line.x = element_line(color = "white")
+        ) +
+        scale_color_manual(values = color) +
+        ggpubr::stat_pvalue_manual(stats, label = "1.4e-03 {p.signif}")
 }

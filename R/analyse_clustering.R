@@ -33,7 +33,7 @@ res_scaled_na0 <- scale(blocks[[1]])
 res_scaled0 <- res_scaled_na0
 res_scaled0[is.na(res_scaled0)] <- 0
 
-res_scaled_na <- normalize(blocks[[1]])
+res_scaled_na <- heatmaply::normalize(blocks[[1]])
 res_scaled <- res_scaled_na
 res_scaled[is.na(res_scaled)] <- 0
 
@@ -142,7 +142,7 @@ res0 <- pvclust(
     nboot = n_boot,
     parallel = TRUE
 ) %>% suppressWarnings()
-plot_dendrogram(res0, k = k)
+plot_dendrogram(res0, k = k, color = colors_var[-seq(k)])
 # save_tiff(plot_dendrogram(res0, k = k), filename = "clust_tot.temp.tiff")
 
 # print(res0, digits = 3)
@@ -251,17 +251,47 @@ cls <- getClusterPerPart(MAX_CLUSTERS, row_dend0)
 sils <- getSilhouettePerPart(res_scaled, cls, res_dist)
 plotSilhouettePerPart(getMeanSilhouettePerPart(sils))
 plotSilhouette(sils[[k-1]]); abline(v = 0.165, col = "red", lwd = 2, lty = 1)
+plot_silhouette(sils[[k-1]], colors_var[c(3, 5)])
 between <- getRelativeBetweenPerPart(MAX_CLUSTERS, res_scaled, cls)
 plotBetweenDiff(getBetweenDifferences(between))
 
 # Variable contribution
 # 100 * getCtrVar(2, cls[[k-1]], res_scaled)
-(ctr <- getDiscriminantVariables(2, cls[[k-1]], res_scaled, 20))
-centr <- getDistPerVariable0(clinic_intersect[, colnames(blocks[[1]])], cls[[k-1]])
-centr[rownames(ctr[seq(4), ]), ]
+ctr <- getDiscriminantVariables(2, cls[[k-1]], res_scaled, 20)
+round(ctr[, 1, drop = FALSE], 2)
+dat <- as.data.frame(clinic_intersect[, colnames(blocks[[1]])])
+cl <-  cls[[k-1]]
+centr <- getDistPerVariable0(dat, cl)
+n <- 3
+centr <- round(centr[rownames(ctr[seq(n), ]), ], 2)
 
-(res <- sapply(colnames(temp), function(i) t.test(temp[i_rows[[1]], i], temp[i_rows[[2]], i])$p.value) %>% sort())
-p.adjust(res)
+dat0 <- cbind(dat, cl = as.character(cl))
+(var <- sapply(colnames(dat), function(i) wilcox.test(as.formula(paste0(i, " ~ cl")), dat0)$p.value) %>% sort())
+var <- (var * n)[seq(n)]
+res <- data.frame(centr, var) %>% add_significance("var")
+res$var <- format(var, scientific = TRUE, digits = 2)
+
+stats <- calculate_test(dat0)
+plot_mean_test(dat0, "physician_global_assessment", stats)
+
+(descr <- pivot_longer(dat0, !cl) %>%
+    group_by(name, cl) %>%
+    summarise(
+        mean = mean(value, na.rm = TRUE),
+        sd = sd(value, na.rm = TRUE),
+        n = length(which(!is.na(value)))
+    ) %>%
+    # filter(str_detect(name, paste(names(var0), collapse= "|")))  %>%
+    pivot_wider(names_from = cl, values_from = c(mean, sd, n))
+)
+
+ctr2 <- tibble(name = rownames(ctr), ctr = ctr[, 1])
+stats <- stats %>% dplyr::select(all_of(c("name", "p", "p.signif")))
+tot <- Reduce(left_join, list(ctr2, descr, stats)) %>% arrange(p)
+tot$p <- format(tot$p * 3, scientific = TRUE, digits = 2)
+arrange(tot, desc(ctr)) %>%
+    slice(seq(3)) %>%
+    dplyr::select(-c(starts_with("n_"), contains("sd_")))
 
 # Outputs
-write_tsv(as.data.frame(cls[[1]]), "clusters.temp.tsv")
+write.csv2(as.data.frame(cl), "clusters.temp.tsv")
