@@ -1061,8 +1061,13 @@ plotDiscriminantVariables = function(discr){
 #' p = ggplot(df, aes(order, x, fill = color))
 #' plotHistogram(p, df, "Histogram", as.character(df$color))
 #' @export plotHistogram
-plotHistogram = function(p, df, title = "", color = "black"){
-
+plotHistogram = function(p = NULL, df = NULL, hjust = 0, vjust = 0.5, title = "", color = "black", color_gradient = Reds(2)){
+  if(is.null(p)) {
+    df0 <- as.data.frame(df)
+    df <- data.frame(val = sort(df0[, 1]), order = seq(nrow(df0)))
+    row.names(df) <- row.names(df0)
+    p <- ggplot(df, aes(order, val, fill = order))
+  }
   p +
     #TODO: if NB_ROW > X, uncomment this
     #geom_hline(yintercept = c(-.5,.5), col="grey", linetype="dotted", size=1) +
@@ -1074,14 +1079,18 @@ plotHistogram = function(p, df, title = "", color = "black"){
       title = title,
       x = "", y = "",
       fill = "Cluster") +
-    theme_classic() +
-    theme_perso() +
+    # theme_classic() +
+    # theme_perso() +
     theme(
       axis.text.y = element_text(size = 12, face = "italic", color = color),
       axis.text.x = element_text(size = 12, face = "italic", color = "darkgrey"),
       axis.line = element_blank(),
       axis.ticks = element_blank(),
-      plot.subtitle = element_text(hjust = 0.5, size = 16, face = "italic"))
+      plot.subtitle = element_text(hjust = 0.5, size = 16, face = "italic")
+    ) +
+    geom_text(aes(label=round(..y.., 2)), hjust = hjust, vjust = vjust) +
+    theme(legend.position = "none") +
+    scale_fill_gradient(low = color_gradient[1], high = color_gradient[2])
 }
 
 #' Default font for plots
