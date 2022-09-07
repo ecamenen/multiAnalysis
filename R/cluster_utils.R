@@ -409,7 +409,7 @@ getCNH = function(t, df, d, k){
   if (t == 1)
     return (pam(d, k, diss = T))
   else if (t == 2){
-    checkEuclidean(d)
+    # checkEuclidean(d)
     return (kmeans(df, centers = k, nstart = 100))
   }
 }

@@ -249,28 +249,42 @@ plotGapPerPart(gaps, MAX_CLUSTERS)
 plotFusionLevels(MAX_CLUSTERS, row_dend0)
 cls <- getClusterPerPart(MAX_CLUSTERS, row_dend0)
 sils <- getSilhouettePerPart(res_scaled, cls, res_dist)
-plotSilhouettePerPart(getMeanSilhouettePerPart(sils))
+mean_sil <- getMeanSilhouettePerPart(sils)
+plotSilhouettePerPart(mean_sil)
 plotSilhouette(sils[[k-1]]); abline(v = 0.165, col = "red", lwd = 2, lty = 1)
 plot_silhouette(sils[[k-1]], colors_var[c(3, 5)])
-between <- getRelativeBetweenPerPart(MAX_CLUSTERS, res_scaled, cls)
-plotBetweenDiff(getBetweenDifferences(between))
+(between <- getRelativeBetweenPerPart(MAX_CLUSTERS, res_dist, cls))
+between_diff <- getBetweenDifferences(between)
+plotBetweenDiff(between_diff)
+height <- rev(row_dend0$height)[seq(MAX_CLUSTERS)]
+height_diff <- abs(getBetweenDifferences(height))
+(summary <- tibble(
+    `Number of clusters` = 2:MAX_CLUSTERS,
+    `Dendrogram height` = height[-1],
+    `Height difference` = height_diff[-1],
+    `Between inertia (%)` = between,
+    `Between difference` = between_diff,
+    `Silhouette index` = mean_sil)
+)
 
 # Variable contribution
 # 100 * getCtrVar(2, cls[[k-1]], res_scaled)
-ctr <- getDiscriminantVariables(2, cls[[k-1]], res_scaled, 20)
-(ggplot(ctr, aes(order, discr_var)) +
-    geom_bar(stat = "identity") +
-    coord_flip() +
-    scale_x_continuous(breaks = ctr$order, labels = rownames(ctr))
-) %>% theme_histo(0)
+ctr <- getDiscriminantVariables(2, cls[[k-1]], res_scaled, ncol(blocks[[1]]))
+plotHistogram(ggplot(ctr, aes(order, discr_var)), ctr)
 round(ctr[, 1, drop = FALSE], 2)
+
+# x = blocks[[1]]; res = sapply(seq(nrow(x)), function(i) round((length(which(is.na(x[i, ]))) / ncol(x))*100, 1))
+# names(res) <- rownames(blocks[[1]])
+# res <- sort(res)
+# res <- data.frame(val = res, order = seq_along(res))
+# plotHistogram(ggplot(res, aes(order, val)), res) + geom_hline(yintercept = c(35), col = "red")
 
 cl <-  cls[[k-1]]
 n <- 3
 dat <- as.data.frame(clinic_intersect[, colnames(blocks[[1]])]) %>%
     cbind(cl = as.character(cl))
 stats <- calculate_test(dat)
-plot_mean_test(dat, "physician_global_assessment", stats)
+plot_mean_test(dat, "arthralgia_myalgia", stats)
 
 (descr <- pivot_longer(dat, !cl) %>%
     group_by(name, cl) %>%
@@ -284,12 +298,30 @@ plot_mean_test(dat, "physician_global_assessment", stats)
 )
 
 ctr2 <- tibble(name = rownames(ctr), ctr = ctr[, 1])
-stats <- stats %>% dplyr::select(all_of(c("name", "p", "p.signif")))
-tot <- Reduce(left_join, list(ctr2, descr, stats)) %>% arrange(p)
-tot$p <- format(tot$p * 3, scientific = TRUE, digits = 2)
+stats2 <- stats %>% dplyr::select(all_of(c("name", "p", "p.signif")))
+tot <- Reduce(left_join, list(ctr2, descr, stats2)) %>% arrange(p)
+tot$p <- format(tot$p * 6, scientific = TRUE, digits = 2)
 arrange(tot, desc(ctr)) %>%
-    slice(seq(n)) %>%
+    # slice(seq(n)) %>%
     dplyr::select(-c(starts_with("n_"), contains("sd_")))
 
 # Outputs
 write.csv2(as.data.frame(cl), "clusters.temp.tsv")
+
+# NHC
+res_dist0 <- get_dist(res_scaled, stand = FALSE, method = "euclidian")
+classif <- getClassif(1, MAX_CLUSTERS, res_scaled, res_dist)
+# classif <- lapply(2:MAX_CLUSTERS, function(i) pam(res_dist0, i, diss = TRUE))
+classif[[2]]$data <- res_scaled
+cls <- getClusterPerPart(MAX_CLUSTERS, classif)
+
+fviz_cluster(
+    classif[[2]],
+    data = res_scaled,
+    repel = TRUE,
+    show.clust.cent = TRUE,
+    palette = colors_var,
+    ggtheme = theme_minimal(),
+    main = "Factor map",
+    ellipse.type = "norm"
+) + theme_classic()
