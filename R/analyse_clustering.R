@@ -156,7 +156,7 @@ fviz_cluster(
     res_clus,
     repel = TRUE,
     show.clust.cent = TRUE,
-    palette = colors_var[ c(3, 5) + 9],
+    palette = colors_var[c(3, 5) + 9],
     ggtheme = theme_minimal(),
     main = "Factor map",
     ellipse.type = "norm"
@@ -251,8 +251,9 @@ cls <- getClusterPerPart(MAX_CLUSTERS, row_dend0)
 sils <- getSilhouettePerPart(res_scaled, cls, res_dist)
 mean_sil <- getMeanSilhouettePerPart(sils)
 plotSilhouettePerPart(mean_sil)
-plotSilhouette(sils[[k-1]]); abline(v = 0.165, col = "red", lwd = 2, lty = 1)
-plot_silhouette(sils[[k-1]], colors_var[c(3, 5)])
+plotSilhouette(sils[[k - 1]])
+abline(v = 0.165, col = "red", lwd = 2, lty = 1)
+plot_silhouette(sils[[k - 1]], colors_var[c(3, 5)])
 (between <- getRelativeBetweenPerPart(MAX_CLUSTERS, res_dist, cls))
 between_diff <- getBetweenDifferences(between)
 plotBetweenDiff(between_diff)
@@ -264,12 +265,13 @@ height_diff <- abs(getBetweenDifferences(height))
     `Height difference` = height_diff[-1],
     `Between inertia (%)` = between,
     `Between difference` = between_diff,
-    `Silhouette index` = mean_sil)
+    `Silhouette index` = mean_sil
+)
 )
 
 # Variable contribution
 # 100 * getCtrVar(2, cls[[k-1]], res_scaled)
-ctr <- getDiscriminantVariables(2, cls[[k-1]], res_scaled, ncol(blocks[[1]]))
+ctr <- getDiscriminantVariables(2, cls[[k - 1]], res_scaled, ncol(blocks[[1]]))
 plotHistogram(ggplot(ctr, aes(order, discr_var, fill = order)), ctr)
 round(ctr[, 1, drop = FALSE], 2)
 
@@ -278,7 +280,7 @@ round(ctr[, 1, drop = FALSE], 2)
 # plotHistogram(df = res, hjust = -0.4) +
 #     geom_hline(yintercept = c(35), col = "red")
 
-cl <-  cls[[k-1]]
+cl <- cls[[k - 1]]
 n <- 3
 dat <- as.data.frame(clinic_intersect[, colnames(blocks[[1]])]) %>%
     cbind(cl = as.character(cl))
@@ -299,7 +301,10 @@ plot_mean_test(dat, "neutrophils", stats)
 ctr2 <- tibble(name = rownames(ctr), ctr = ctr[, 1])
 stats2 <- stats %>% dplyr::select(all_of(c("name", "p", "p.signif")))
 tot <- Reduce(left_join, list(ctr2, descr, stats2)) # %>% arrange(p)
-tot <- tot %>% slice(seq(6)) %>% adjust_pvalue(method = "BH") %>% add_significance(p.col="p.adj")
+tot <- tot %>%
+    slice(seq(6)) %>%
+    adjust_pvalue(method = "BH") %>%
+    add_significance(p.col = "p.adj")
 tot$p <- format(tot$p, scientific = TRUE, digits = 2)
 tot$p.adj <- format(tot$p.adj, scientific = TRUE, digits = 2)
 arrange(tot, desc(ctr)) %>%

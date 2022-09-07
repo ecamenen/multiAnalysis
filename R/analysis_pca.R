@@ -27,8 +27,10 @@ get_ctr <- function(x, i = "var") {
     x <- x[[i]]$contrib
     sapply(
         seq(ncol(x)),
-        function(i)
-            which((x[, i]  %>% sort(TRUE)) > (1 / nrow(x) * 100)))
+        function(i) {
+              which((x[, i] %>% sort(TRUE)) > (1 / nrow(x) * 100))
+          }
+    )
 }
 (ctr <- get_ctr(res_pca))
 vars <- dimdesc(res_pca, 1:2)
@@ -74,7 +76,7 @@ theme_perso_2D(
         res_pca,
         geom.ind = "point",
         col.ind = as.character(cls[, 2]),
-        palette = colors_var[c(3, 5) +9],
+        palette = colors_var[c(3, 5) + 9],
         addEllipses = FALSE,
         legend.title = "Clusters"
     )

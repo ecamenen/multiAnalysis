@@ -13,7 +13,7 @@ RGCCA:::load_libraries(
         "RColorBrewer",
         libs,
         "tidyverse",
-        "dplyr"# ,
+        "dplyr" # ,
         # "vapoRwave"
     )
 )

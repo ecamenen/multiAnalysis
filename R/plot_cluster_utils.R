@@ -93,7 +93,9 @@ plot_mean_test <- function(x, i, stats, color = colors_var[c(12, 14)]) {
         var = as.data.frame(x[, i])[, 1],
         cl = factor(x$cl, labels = paste("Cluster", seq(2)))
     )
-    stats <- stats %>% filter(name == i) %>% add_xy_position(x = "cl")
+    stats <- stats %>%
+        filter(name == i) %>%
+        add_xy_position(x = "cl")
     stats$y.position <- max(temp[, 1], na.rm = TRUE) + 1
     stats$p <- format(stats$p, scientific = TRUE, digits = 2)
     ggbetweenstats(

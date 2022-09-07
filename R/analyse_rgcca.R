@@ -30,10 +30,7 @@ plot_var_2D(
 
 plot_ind0 <- function(
     x,
-    colors = c(
-        brewer.pal(n = 12, name = "Paired")#,
-        #vapoRwave:::vapoRwave_palette
-    ),
+    colors = colors_var,
     no_overlap = TRUE,
     text = FALSE,
     i_block = n
