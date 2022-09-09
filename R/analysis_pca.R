@@ -28,8 +28,8 @@ get_ctr <- function(x, i = "var") {
     sapply(
         seq(ncol(x)),
         function(i) {
-              which((x[, i] %>% sort(TRUE)) > (1 / nrow(x) * 100))
-          }
+            which((x[, i] %>% sort(TRUE)) > (1 / nrow(x) * 100))
+        }
     )
 }
 (ctr <- get_ctr(res_pca))

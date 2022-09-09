@@ -7,7 +7,8 @@ setGraphicBasic <- function() {
 plot_dendrogram <- function(
     x,
     k,
-    color = c("indianred1", "darkseagreen", "steelblue")
+    color = c("indianred1", "darkseagreen", "steelblue"),
+    color_bar = color
 ) {
     x0 <- color_dendrogram(x, k = k, color = color) %>%
         set("labels_cex", 0.8)
@@ -36,7 +37,7 @@ plot_dendrogram <- function(
     # )
     rect.dendrogram(x0, k = k, border = "gray", lty = 3, lwd = 2)
     # pvrect(x, border = "gray", lty = 3, lwd = 2)
-    colored_bars(colors = row_col0, dend = x0, rowLabels = "Disease")
+    colored_bars(colors = color_bar, dend = x0, rowLabels = "Disease")
 }
 
 #' @export
@@ -80,6 +81,7 @@ save_tiff <- function(f, filename = "violinplot_clin.tiff") {
     dev.off()
 }
 
+#' @export
 calculate_test <- function(x) {
     df <- pivot_longer(x, !cl) %>%
         group_by(name) %>%
@@ -88,6 +90,7 @@ calculate_test <- function(x) {
     return(df)
 }
 
+#' @export
 plot_mean_test <- function(x, i, stats, color = colors_var[c(12, 14)]) {
     temp <- data.frame(
         var = as.data.frame(x[, i])[, 1],

@@ -19,6 +19,8 @@ n_boot <- 1000
 source(file.path(golem::get_golem_wd(), "R", "set_analysis.R"))
 source(file.path(golem::get_golem_wd(), "R", "plot_cluster_utils.R"))
 source(file.path(golem::get_golem_wd(), "R", "cluster_utils.R"))
+source(file.path(golem::get_golem_wd(), "R", "plot_utils.R"))
+
 MAX_CLUSTERS <- 6
 colPers <- function(x) colors_var[seq(x)]
 
@@ -142,7 +144,7 @@ res0 <- pvclust(
     nboot = n_boot,
     parallel = TRUE
 ) %>% suppressWarnings()
-plot_dendrogram(res0, k = k, color = colors_var[c(3, 5)])
+plot_dendrogram(res0, k = k, color = colors_var[c(3, 5)], row_col0)
 # save_tiff(plot_dendrogram(res0, k = k), filename = "clust_tot.temp.tiff")
 
 # print(res0, digits = 3)

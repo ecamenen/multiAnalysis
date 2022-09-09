@@ -1,5 +1,5 @@
-#' @import corrplot dendextend dplyr factoextra FactoMineR ggplot2
-#' @import ggrepel golem heatmaply NbClust pheatmap pvclust
+#' @import corrplot cluster dendextend dplyr factoextra FactoMineR ggplot2
+#' @import ggrepel ggstatsplot golem heatmaply NbClust pheatmap pvclust
 #' @import RColorBrewer RGCCA rstatix stringr tidyverse visNetwork
 #' @importFrom graphics par text
 #' @importFrom stats as.dendrogram

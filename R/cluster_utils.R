@@ -259,8 +259,8 @@ plotAxis = function (side, min, max, interval = 1, lwd = 3){
   axis(side, seq(min, max, interval), lwd = lwd)
 }
 
-plotBestClustering = function(sub_title, values, values_type, optimal_nb_clusters, interval = 1, min_x = 2, best = NULL, val2 = NULL){
-  plotAxis(1, 2, MAX_CLUSTERS)
+plotBestClustering = function(sub_title, values, values_type, optimal_nb_clusters, n, interval = 1, min_x = 2, best = NULL, val2 = NULL){
+  plotAxis(1, 2, n)
 
   if (interval >= 1) axisSeq = round(values)
   else axisSeq = c(0, max(values) + 0.1)
@@ -292,7 +292,7 @@ plotBestClustering = function(sub_title, values, values_type, optimal_nb_cluster
     t_values = values
 
   if(isTRUE(TEXT))
-    text(y = values, x = min_x:MAX_CLUSTERS, labels = round(t_values, 2), cex = 1.2, pos = 4, col = "red")
+    text(y = values, x = min_x:n, labels = round(t_values, 2), cex = 1.2, pos = 4, col = "red")
   if (isTRUE(VERBOSE))
     cat("Optimal number of clusters k = ", optimal_nb_clusters, "\n","With a", values_type, " of ", best, "\n", sep="")
 }
@@ -569,7 +569,7 @@ plotBetweenDiff = function(between_diff) {
   #savePdf("between_differences.pdf")
   setGraphic()
   plot(2:(length(between_diff) + 1), between_diff, type = "b", ylim = c(round(min(between_diff)) - 1, round(max(between_diff)) + 1), xlim = c(2, (length(between_diff) + 2)), xlab = "Nb. of clusters", ylab = "Between-cluster variation (%)", col = "grey", axes = F)
-  plotBestClustering("Largest between differences method", between_diff, " variation with the previous partitionning (%)", optimal_nb_clusters)
+  plotBestClustering("Largest between differences method", between_diff, " variation with the previous partitionning (%)", optimal_nb_clusters, n = length(between_diff))
   #suprLog = dev.off()
 }
 
@@ -582,7 +582,7 @@ plotFusionLevels = function(n, c) {
   setGraphic()
   #savePdf(paste(opt$output9, ".pdf", sep=""))
   plot(2:n, fusion, type = "b", ylim = c(round(min(fusion)) - 1,round(max(fusion)) + 1), xlim = c(2, n + 1), xlab = "Nb. of clusters", ylab = "Cophenetic distance", col = "grey", axes = F)
-  plotBestClustering("Fusion level method", fusion, " gain with the previous fusion level", optimal_nb_clusters, val2 = diff)
+  plotBestClustering("Fusion level method", fusion, " gain with the previous fusion level", optimal_nb_clusters, n = n, val2 = diff)
   #suprLog = dev.off()
 }
 
@@ -633,7 +633,7 @@ plotSilhouettePerPart = function(mean_silhouette){
   #savePdf(opt$output1)
   optimal_nb_clusters = which.max(mean_silhouette)+1
   plot(2:(length(mean_silhouette)+1), mean_silhouette, type="b", xlim=c(2,length(mean_silhouette)+2), ylim=c(0,max(mean_silhouette)+0.1), col="grey", xlab="Nb. of clusters", ylab="Average silhouette width", axes=F)
-  plotBestClustering("Silhouette method", mean_silhouette,"n average width", optimal_nb_clusters, 0.1)
+  plotBestClustering("Silhouette method", mean_silhouette,"n average width", optimal_nb_clusters, 0.1, n = length(mean_silhouette))
   #suprLog = dev.off()
   #return (optimal_nb_clusters)
 }
@@ -681,7 +681,7 @@ plotGapPerPart = function(g, n, v=T){
   best = gap_k[,"gap"][optimal_nb_clusters]
   if(optimal_nb_clusters < n) best = paste(best, ">",gap_k[,"gap"][optimal_nb_clusters+1],"-",gap_k[,"SE.sim"][optimal_nb_clusters +1])
   plot(g, arrowArgs = list(col="gray", length=1/15, lwd=2, angle=90, code=3), type="b", xlim=c(1,n+1), ylim=c(0,max(g$Tab[,"gap"])+0.1), col="grey", xlab="Nb. of clusters", ylab=expression(Gap[k]), main="",axes=F)
-  plotBestClustering("Gap statistics method", g$Tab[,"gap"]," gap value", optimal_nb_clusters, 0.1, 1, best)
+  plotBestClustering("Gap statistics method", g$Tab[,"gap"]," gap value", optimal_nb_clusters, 0.1, 1, best, n = n)
   #cat(paste("With a corrected index, optimal number of clusters k =",getGapBest(gap,"firstSEmax"), "\n"))
   #suprLog = dev.off()
 }

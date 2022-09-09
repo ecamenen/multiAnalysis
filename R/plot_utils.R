@@ -1,5 +1,6 @@
 options(ggrepel.max.overlaps = Inf)
 
+#' @export
 theme_perso0 <- function(p) {
     axis <- element_text(
         face = "bold.italic",
@@ -13,6 +14,7 @@ theme_perso0 <- function(p) {
         )
 }
 
+#' @export
 theme_histo <- function(p, angle = 90) {
     (p +
         theme_classic() +
@@ -21,6 +23,7 @@ theme_histo <- function(p, angle = 90) {
         theme_perso0()
 }
 
+#' @export
 theme_perso_2D <- function(p) {
     theme_perso0(
         p +
