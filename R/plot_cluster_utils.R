@@ -116,3 +116,34 @@ plot_mean_test <- function(x, i, stats, color = colors_var[c(12, 14)]) {
         scale_color_manual(values = color) +
         ggpubr::stat_pvalue_manual(stats, label = "1.4e-03 {p.signif}")
 }
+
+get_summary <- function(res_scaled, res_dist, cls, MAX_CLUSTERS, row_dend0 = NULL) {
+    sils <- getSilhouettePerPart(res_scaled, cls, res_dist)
+    mean_sil <- getMeanSilhouettePerPart(sils)
+    # plotSilhouettePerPart(mean_sil)
+    between <- getRelativeBetweenPerPart(MAX_CLUSTERS, res_dist, cls)
+    between_diff <- getBetweenDifferences(between)
+    # plotBetweenDiff(between_diff)
+    summary <- tibble(
+        `Number of clusters` = 2:MAX_CLUSTERS,
+        `Between inertia (%)` = between,
+        `Between difference` = between_diff,
+        `Silhouette index` = mean_sil
+    )
+    if (!is.null(row_dend0)) {
+        height <- rev(row_dend0$height)[seq(MAX_CLUSTERS)]
+        height_diff <- abs(getBetweenDifferences(height))
+        summary <- cbind(
+            summary,
+            tibble(
+                `Dendrogram height` = height[-1],
+                `Height difference` = height_diff[-1]
+            )
+        ) %>% tibble()
+    }
+    print(summary)
+    sil_k <- sils[[k - 1]]
+    # plotSilhouette(sil_k)
+    # abline(v = mean(sil_k[, 3]), col = "red", lwd = 2, lty = 1)
+    plot_silhouette(sil_k, colors_k)
+}
