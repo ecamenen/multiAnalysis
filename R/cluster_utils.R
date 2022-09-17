@@ -1061,12 +1061,18 @@ plotDiscriminantVariables = function(discr){
 #' p = ggplot(df, aes(order, x, fill = color))
 #' plotHistogram(p, df, "Histogram", as.character(df$color))
 #' @export plotHistogram
-plotHistogram = function(p = NULL, df = NULL, hjust = 0, vjust = 0.5, title = "", color = "black", color_gradient = Reds(2)){
+plotHistogram = function(p = NULL, df = NULL, hjust = 0, vjust = 0.5, n = 100, title = "", color = "black", color_gradient = Reds(2)){
   if(is.null(p)) {
     df0 <- as.data.frame(df)
-    df <- data.frame(val = sort(df0[, 1]), order = seq(nrow(df0)))
-    row.names(df) <- row.names(df0)
-    p <- ggplot(df, aes(order, val, fill = order))
+    colnames(df0)[1] <- "val"
+    if (n < nrow(df0)) {
+      n <- nrow(df0)
+    }
+    df <- (df0 %>%
+             arrange(desc(val)) %>%
+             mutate(order = rev(seq(nrow(df0))))
+           )[seq(n), ]
+    p <- ggplot(df, aes(order, val, fill = order)) + theme_classic()
   }
   p +
     #TODO: if NB_ROW > X, uncomment this
