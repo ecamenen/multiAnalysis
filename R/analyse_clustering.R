@@ -22,7 +22,7 @@ source(file.path(golem::get_golem_wd(), "R", "cluster_utils.R"))
 source(file.path(golem::get_golem_wd(), "R", "plot_utils.R"))
 
 MAX_CLUSTERS <- 6
-colPers <- function(x) colors_var[seq(x)]
+colors_k <- brewer.pal(n = 9, name = "Set1")[seq(k) + 2]
 
 names_levels <- str_replace(levels(disease), " \\(.+\\)", "")
 # names_levels <- c("Still", "Control")
@@ -132,7 +132,7 @@ fviz_dend(
     k = k,
     rect = TRUE,
     # rect_fill = TRUE,
-    k_colors = colors_var[seq(k)],
+    k_colors = colors_k,
     color_labels_by_k = TRUE,
 )
 
@@ -144,7 +144,7 @@ res0 <- pvclust(
     nboot = n_boot,
     parallel = TRUE
 ) %>% suppressWarnings()
-plot_dendrogram(res0, k = k, color = colors_var[c(3, 5)], row_col0)
+plot_dendrogram(res0, k = k, color = colors_k, row_col0)
 # save_tiff(plot_dendrogram(res0, k = k), filename = "clust_tot.temp.tiff")
 
 # print(res0, digits = 3)
@@ -158,14 +158,11 @@ fviz_cluster(
     res_clus,
     repel = TRUE,
     show.clust.cent = TRUE,
-    palette = colors_var[c(3, 5) + 9],
+    palette = colors_k,
     ggtheme = theme_minimal(),
     main = "Factor map",
     ellipse.type = "norm"
 ) + theme_classic()
-
-# plot_silhouette(res_clus, colors_var[k:1])
-
 
 # dl <- dendlist(
 #     color_dendrogram(d1, 2, colors_var[c(3, 5) + 9]),
@@ -250,41 +247,23 @@ heatmap(
 plotGapPerPart(gaps, MAX_CLUSTERS)
 plotFusionLevels(MAX_CLUSTERS, row_dend0)
 cls <- getClusterPerPart(MAX_CLUSTERS, row_dend0)
-sils <- getSilhouettePerPart(res_scaled, cls, res_dist)
-mean_sil <- getMeanSilhouettePerPart(sils)
-plotSilhouettePerPart(mean_sil)
-plotSilhouette(sils[[k - 1]])
-abline(v = 0.165, col = "red", lwd = 2, lty = 1)
-plot_silhouette(sils[[k - 1]], colors_var[c(3, 5)])
-(between <- getRelativeBetweenPerPart(MAX_CLUSTERS, res_dist, cls))
-between_diff <- getBetweenDifferences(between)
-plotBetweenDiff(between_diff)
-height <- rev(row_dend0$height)[seq(MAX_CLUSTERS)]
-height_diff <- abs(getBetweenDifferences(height))
-(summary <- tibble(
-    `Number of clusters` = 2:MAX_CLUSTERS,
-    `Dendrogram height` = height[-1],
-    `Height difference` = height_diff[-1],
-    `Between inertia (%)` = between,
-    `Between difference` = between_diff,
-    `Silhouette index` = mean_sil
-)
-)
+get_summary(res_scaled, res_dist, cls, MAX_CLUSTERS, row_dend0)
 
 # Variable contribution
-# 100 * getCtrVar(2, cls[[k-1]], res_scaled)
-ctr <- getDiscriminantVariables(2, cls[[k - 1]], res_scaled, ncol(blocks[[1]]))
-plotHistogram(ggplot(ctr, aes(order, discr_var, fill = order)), ctr)
-round(ctr[, 1, drop = FALSE], 2)
+100 * getCtrVar(k, cls[[k-1]], res_scaled)
+ctr <- getDiscriminantVariables(k, cls[[k - 1]], res_scaled, ncol(blocks))
+# rownames(ctr) <- str_sub(rownames(ctr), 1, 40) %>% snakecase::to_any_case(unique_sep = NULL, parsing_option = 3)
+plotHistogram(df = ctr)
+# round(ctr[, 1, drop = FALSE], 2)
 
-# x = blocks[[1]]; res = sapply(seq(nrow(x)), function(i) round((length(which(is.na(x[i, ]))) / ncol(x))*100, 1))
-# names(res) <- rownames(blocks[[1]])
+# x = blocks; res = sapply(seq(nrow(x)), function(i) round((length(which(is.na(x[i, ]))) / ncol(x))*100, 1))
+#  names(res) <- rownames(blocks[[1]])
 # plotHistogram(df = res, hjust = -0.4) +
 #     geom_hline(yintercept = c(35), col = "red")
 
 cl <- cls[[k - 1]]
-n <- 3
-dat <- as.data.frame(clinic_intersect[, colnames(blocks[[1]])]) %>%
+n <- 6
+dat <- as.data.frame(clinic_intersect[, colnames(blocks)]) %>%
     cbind(cl = as.character(cl))
 stats <- calculate_test(dat)
 plot_mean_test(dat, "neutrophils", stats)
@@ -304,7 +283,7 @@ ctr2 <- tibble(name = rownames(ctr), ctr = ctr[, 1])
 stats2 <- stats %>% dplyr::select(all_of(c("name", "p", "p.signif")))
 tot <- Reduce(left_join, list(ctr2, descr, stats2)) # %>% arrange(p)
 tot <- tot %>%
-    slice(seq(6)) %>%
+    slice(seq(n)) %>%
     adjust_pvalue(method = "BH") %>%
     add_significance(p.col = "p.adj")
 tot$p <- format(tot$p, scientific = TRUE, digits = 2)
@@ -313,23 +292,30 @@ arrange(tot, desc(ctr)) %>%
     # slice(seq(n)) %>%
     dplyr::select(-c(starts_with("n_"), contains("sd_"), "p", "p.signif"))
 
+tab <- data.frame(batch = clinic_intersect$batch, group = as.numeric(cl))
+fisher_test(table(tab))
+pairwise_fisher_test(table(tab))
+plotHistogram(df = ctr) +
+    labs(subtitle = expression(paste("Fisher test for count data (2,32), ", italic("p"), " = ", "<0.0001"))) +
+    theme(plot.subtitle=element_text(size=15, hjust=0.5, face="italic", color="black"))
 
 # Outputs
 write.csv2(as.data.frame(cl), "clusters.temp.tsv")
 
 # NHC
-res_dist0 <- get_dist(res_scaled, stand = FALSE, method = "euclidian")
-classif <- getClassif(1, MAX_CLUSTERS, res_scaled, res_dist)
+classif <- getClassif(2, MAX_CLUSTERS, res_scaled, res_dist)
+# res_dist0 <- get_dist(res_scaled, stand = FALSE, method = "euclidian")
 # classif <- lapply(2:MAX_CLUSTERS, function(i) pam(res_dist0, i, diss = TRUE))
-classif[[2]]$data <- res_scaled
+classif[[k]]$data <- res_scaled
 cls <- getClusterPerPart(MAX_CLUSTERS, classif)
+get_summary(res_scaled, res_dist, cls, MAX_CLUSTERS)
 
 fviz_cluster(
-    classif[[2]],
+    classif[[k]],
     data = res_scaled,
     repel = TRUE,
     show.clust.cent = TRUE,
-    palette = colors_var,
+    palette = colors_k,
     ggtheme = theme_minimal(),
     main = "Factor map",
     ellipse.type = "norm"
