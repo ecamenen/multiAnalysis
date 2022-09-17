@@ -69,17 +69,100 @@ theme_perso_2D(
     )
 )
 
+var <- as.factor(clinic_intersect$batch)
+
+Y <- res_pca$ind$coord[, 1]
+
+dat <- data.frame(Y = log1p(Y - min(Y))) %>%
+    mutate(group = var)
+colnames(dat)[1] <- "Y"
+model  <- lm(Y ~ group, data = dat)
+ggqqplot(residuals(model))
+group_by(dat, group) %>%
+    shapiro_test(Y)
+ggqqplot(dat, "Y", facet.by = "group")
+levene_test(dat, Y ~ group)
+(res_aov <- anova_test(dat, Y ~ group))
+(pwc <- tukey_hsd(dat, Y ~ group))
+
+n <- length(levels(var))
+theme_perso_2D(
+    fviz_pca_ind(
+        res_pca,
+        geom.ind = "point",
+        col.ind = var,
+        palette = colors_var[10:(10 + n)],
+        addEllipses = TRUE,
+        legend.title = "Gender",
+        pointsize = 3
+    )
+) + scale_shape_manual(values = rep(19, n)) +
+    labs(subtitle = get_test_label(res_aov, detailed = TRUE)) +
+    theme(plot.subtitle = element_text(hjust = 0.5))
+
+pwc <- pwc %>% add_xy_position(x = "group")
+ggboxplot(dat, x = "group", y = "Y", color = "group", palette = colors_var[10:12]) +
+    stat_pvalue_manual(pwc, hide.ns = TRUE) +
+    labs(
+        subtitle = get_test_label(res_aov, detailed = TRUE),
+        caption = get_pwc_label(pwc)
+    )
+
+dat <- data.frame(Y = log1p(Y - min(Y))) %>%
+    mutate(var = (clinic_intersect$age_at_inclusion_time))
+colnames(dat)[1] <- "Y"
+(model  <- lm(Y ~ var, data = dat))
+# dat <- data.frame(Y = Y ^(1/3)) %>%
+#     mutate(var = (clinic_intersect$gender))
+# (model  <- glm(var ~ Y, data = dat, family = binomial(link = logit)))
+summary(model)
+fs <- summary(model)$fstatistic
+sub_title <- paste0(
+        "Linear regression, ",
+        "F",
+        "(",
+        paste(round(fs[2:3]), collapse = ",") ,
+        ") = ",
+        round(fs[1], 1),
+        ", ",
+        "p",
+        " = ",
+        round(summary(model)$coefficients[2, 4], 3)
+    )
+ggplot(dat, aes(Y, var)) +
+    geom_point() +
+    stat_smooth(method = lm) +
+    stat_regline_equation(label.x = 3, label.y = 7) +
+    labs(subtitle = sub_title)
+ggscatter(dat, x = "Y", y = "var", add = "reg.line") +
+    stat_regline_equation(aes(label =  paste(..eq.label.., ..rr.label.., sep = "~~~~")))
+shapiro.test(residuals(model))
 cls <- read.csv2("clusters.temp.tsv")
 
 theme_perso_2D(
     fviz_pca_ind(
         res_pca,
         geom.ind = "point",
-        col.ind = as.character(cls[, 2]),
-        palette = colors_var[c(3, 5) + 9],
+        col.ind = log1p(clinic_intersect$BMI),
         addEllipses = FALSE,
+        gradient.cols = colors_ind,
+        legend.title = "log(BMI)",
+        pointsize = 3
+    )) +
+    labs(subtitle = sub_title) +
+    theme(plot.subtitle = element_text(hjust = 0.5))
+
+
+
+theme_perso_2D(
+    fviz_pca_ind(
+        res_pca,
+        geom.ind = "text",
+        col.ind = as.character(cls[, 2]),
+        palette = colors_var[c(3, 4) + 9],
+        addEllipses = TRUE,
         legend.title = "Clusters"
-    )
+    )# + scale_shape_manual(values = rep(19, 2))
 )
 
 res_pca$ind
