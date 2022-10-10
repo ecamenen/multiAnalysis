@@ -1,4 +1,4 @@
-block_name <- "blocks_clinic"
+block_name <- "clinic_still_processed"
 libs <- c(
     "FactoMineR",
     "factoextra",
@@ -10,6 +10,28 @@ blocks <- blocks[[1]]
 
 res_pca <- PCA(blocks, scale.unit = TRUE, ncp = 3, grap = FALSE) %>%
     suppressWarnings()
+var <- as.factor(clinic_intersect$gender)
+
+Y <- res_pca$ind$coord[, 1]
+
+dat <- data.frame(Y = Y - min(Y)) %>%
+    mutate(group = var)
+colnames(dat)[1] <- "Y"
+(res_aov <- anova_test(dat, Y ~ group))
+theme_perso_2D(
+    fviz_pca_ind(
+        res_pca,
+        geom.ind = "text",
+        col.ind = var,
+        palette = colors_var[10:(10 + n)],
+        addEllipses = TRUE,
+        legend.title = "Batch",
+        pointsize = 3
+    )
+) + scale_shape_manual(values = rep(19, n)) +
+    labs(subtitle = get_test_label(res_aov, detailed = TRUE)) +
+    theme(plot.subtitle = element_text(hjust = 0.5))
+
 
 (fviz_contrib(res_pca, choice = "ind", axes = 1, top = 50)) %>% theme_histo()
 tibble(res_pca$eig)
@@ -34,7 +56,7 @@ get_ctr <- function(x, i = "var") {
 }
 (ctr <- get_ctr(res_pca))
 vars <- dimdesc(res_pca, 1:2)
-vars$Dim.1$quanti %>%
+temp0 <- vars$Dim.1$quanti %>%
     as.data.frame() %>%
     adjust_pvalue("p.value") %>%
     add_significance("p.value.adj")
@@ -63,19 +85,20 @@ theme_perso_2D(
         res_pca,
         geom.ind = "point",
         col.ind = disease,
-        palette = colors_var,
-        addEllipses = FALSE,
+        palette = colors_var[seq(2) + 9],
+        addEllipses = TRUE,
         legend.title = "Disease"
-    )
+    ) + scale_shape_manual(values = rep(19, 2))
 )
 
-var <- as.factor(clinic_intersect$batch)
+var <- as.factor(clinic_intersect$gender)
 
 Y <- res_pca$ind$coord[, 1]
 
-dat <- data.frame(Y = log1p(Y - min(Y))) %>%
+dat <- data.frame(Y = Y - min(Y)) %>%
     mutate(group = var)
 colnames(dat)[1] <- "Y"
+(res_aov <- anova_test(dat, Y ~ group))
 model  <- lm(Y ~ group, data = dat)
 ggqqplot(residuals(model))
 group_by(dat, group) %>%
@@ -108,8 +131,8 @@ ggboxplot(dat, x = "group", y = "Y", color = "group", palette = colors_var[10:12
         caption = get_pwc_label(pwc)
     )
 
-dat <- data.frame(Y = log1p(Y - min(Y))) %>%
-    mutate(var = (clinic_intersect$age_at_inclusion_time))
+dat <- data.frame(Y = (Y)) %>%
+    mutate(var = log1p(clinic_intersect$BMI))
 colnames(dat)[1] <- "Y"
 (model  <- lm(Y ~ var, data = dat))
 # dat <- data.frame(Y = Y ^(1/3)) %>%
@@ -137,32 +160,37 @@ ggplot(dat, aes(Y, var)) +
 ggscatter(dat, x = "Y", y = "var", add = "reg.line") +
     stat_regline_equation(aes(label =  paste(..eq.label.., ..rr.label.., sep = "~~~~")))
 shapiro.test(residuals(model))
-cls <- read.csv2("clusters.temp.tsv")
+cls <- read.csv2("clusters_som2.temp.tsv")
+
+k <- length(unique(cls[, 2]))
+cl <- left_join(data.frame(Y, X = as.double(names(Y))), cls)
+colors_k <- brewer.pal(n = 9, name = "Set1")[seq(k) + 2]
+if (k > 2)
+    colors_k <- c(colors_k[seq(2)], "red", colors_k[3])
 
 theme_perso_2D(
     fviz_pca_ind(
         res_pca,
         geom.ind = "point",
-        col.ind = log1p(clinic_intersect$BMI),
+        col.ind = clinic_intersect$physician_global_assessment,
         addEllipses = FALSE,
         gradient.cols = colors_ind,
-        legend.title = "log(BMI)",
+        legend.title = "Global assessment",
         pointsize = 3
     )) +
     labs(subtitle = sub_title) +
     theme(plot.subtitle = element_text(hjust = 0.5))
 
-
-
 theme_perso_2D(
     fviz_pca_ind(
         res_pca,
+        axes = c(1, 2),
         geom.ind = "text",
-        col.ind = as.character(cls[, 2]),
-        palette = colors_var[c(3, 4) + 9],
+        col.ind = as.character(cl[, 3]),
+        palette = c(colors_k, "red"),
         addEllipses = TRUE,
         legend.title = "Clusters"
-    )# + scale_shape_manual(values = rep(19, 2))
+    ) + scale_shape_manual(values = rep(19, k))
 )
 
 res_pca$ind
@@ -176,13 +204,13 @@ theme_perso_2D(
         res_pca,
         repel = TRUE,
         col.var = "gray",
-        col.ind = disease,
+        col.ind = as.character(cl[, 3]),
         gradient.cols = colPers,
         # alpha.var = "cos2",
-        palette = colors_var[10:11],
-        legend.title = "Disease",
+        palette = c(colors_k, "red"),
+        legend.title = "Clusters",
         # pointsize = "cos2",
         mean.point = FALSE,
         select.var = list(name = names(unlist(ctr[1:2])))
-    )
+    ) + scale_shape_manual(values = rep(19, k))
 )
