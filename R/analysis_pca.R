@@ -5,6 +5,7 @@ libs <- c(
     "rstatix"
 )
 source(file.path(golem::get_golem_wd(), "R", "set_analysis.R"))
+source(file.path(golem::get_golem_wd(), "R", "plot_utils.R"))
 colPers <- rev(colors_ind[3:2])
 blocks <- blocks[[1]]
 
@@ -160,13 +161,11 @@ ggplot(dat, aes(Y, var)) +
 ggscatter(dat, x = "Y", y = "var", add = "reg.line") +
     stat_regline_equation(aes(label =  paste(..eq.label.., ..rr.label.., sep = "~~~~")))
 shapiro.test(residuals(model))
-cls <- read.csv2("clusters_som2.temp.tsv")
 
-k <- length(unique(cls[, 2]))
-cl <- left_join(data.frame(Y, X = as.double(names(Y))), cls)
-colors_k <- brewer.pal(n = 9, name = "Set1")[seq(k) + 2]
-if (k > 2)
-    colors_k <- c(colors_k[seq(2)], "red", colors_k[3])
+cls <- set_clusters(Y)
+cl <- cls$cl
+colors_k <- cls$colors_k
+k <- length(colors_k)
 
 theme_perso_2D(
     fviz_pca_ind(
@@ -186,7 +185,7 @@ theme_perso_2D(
         res_pca,
         axes = c(1, 2),
         geom.ind = "text",
-        col.ind = as.character(cl[, 3]),
+        col.ind = as.character(cl),
         palette = c(colors_k, "red"),
         addEllipses = TRUE,
         legend.title = "Clusters"
@@ -204,7 +203,7 @@ theme_perso_2D(
         res_pca,
         repel = TRUE,
         col.var = "gray",
-        col.ind = as.character(cl[, 3]),
+        col.ind = as.character(cl),
         gradient.cols = colPers,
         # alpha.var = "cos2",
         palette = c(colors_k, "red"),
