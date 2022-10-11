@@ -113,10 +113,23 @@ theme_perso = function() {
 set_clusters <- function(Y) {
     cls <- read.csv2("clusters_som2.temp.tsv")
     k <- length(unique(cls[, 2]))
-    cl <- left_join(data.frame(Y, X = as.double(names(Y))), cls)
+    if(!is.null(names(Y)))
+        cl <- left_join(data.frame(Y, X = as.double(names(Y))), cls)[, 3]
+    else
+        cl <- left_join(data.frame(X = as.double(rownames(blocks))), cls)[, 2]
     colors_k <- brewer.pal(n = 9, name = "Set1")[seq(k) + 2]
     if (k > 2)
         colors_k <- c(colors_k[seq(2)], "red", colors_k[3])
 
-    return(list(cl = cl[, 3], colors_k = colors_k))
+    return(list(cl = cl, colors_k = colors_k, k = k))
+}
+
+get_ctr <- function(x, i = "var") {
+    x <- x[[i]]$contrib
+    sapply(
+        seq(ncol(x)),
+        function(i) {
+            which((x[, i] %>% sort(TRUE)) > (1 / nrow(x) * 100))
+        }
+    )
 }

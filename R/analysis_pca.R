@@ -46,15 +46,6 @@ fviz_eig(
 
 # Variables
 fviz_contrib(res_pca, choice = "var", axes = 1, top = 50) %>% theme_histo()
-get_ctr <- function(x, i = "var") {
-    x <- x[[i]]$contrib
-    sapply(
-        seq(ncol(x)),
-        function(i) {
-            which((x[, i] %>% sort(TRUE)) > (1 / nrow(x) * 100))
-        }
-    )
-}
 (ctr <- get_ctr(res_pca))
 vars <- dimdesc(res_pca, 1:2)
 temp0 <- vars$Dim.1$quanti %>%
