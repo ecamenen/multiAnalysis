@@ -43,6 +43,11 @@ Imports:
     tidyverse,
     utils,
     visNetwork
+Suggests: 
+    knitr,
+    rmarkdown
+VignetteBuilder: 
+    knitr
 Encoding: UTF-8
 Language: en-US
 LazyData: false
