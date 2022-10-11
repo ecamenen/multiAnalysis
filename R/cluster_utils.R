@@ -57,194 +57,6 @@ getTimeElapsed <- function(start_time) {
 }
 
 ################################
-#          Parsing
-################################
-
-
-# rename row and avoid doublets errors
-preProcessData <- function(d) {
-    if (ncol(d) == 1) {
-        stop(paste("Check for the separator (by default, tabulation)."), call. = FALSE)
-    }
-
-    REMOVE_DOUBLETS <- (nrow(d) > NB_ROW_MAX) # Discard line containing the same information on all columns from analysis
-    d <- renameRowname(d)
-    # remove columns containing characters
-    # if(nrow(d) > NB_ROW_MAX) VERBOSE_NIV2 = T
-    # get only columns with numeric values
-    d <- d[, unlist(sapply(1:ncol(d), function(i) is.numeric(d[, i])))]
-
-    if (isTRUE(REMOVE_DOUBLETS)) {
-        printProgress(VERBOSE_NIV2, "Loading data")
-        d <- discardRowCondDoublets(d)
-    }
-
-    if (isSymmetric(as.matrix(d)) & !HEAD) {
-          colnames(d) <- rownames(d)
-      }
-
-    return(d)
-}
-
-
-# avoid doublets in row names
-# r: row names vector
-renameRownameDoublets <- function(names.row) {
-    j <- 1
-
-    for (i in 2:length(names.row)) {
-        if (names.row[i] == names.row[i - 1]) {
-            j <- j + 1
-            names.row[i] <- paste(names.row[i], ".", j, sep = "")
-        } else {
-            j <- 1
-        }
-    }
-    return(names.row)
-}
-
-# rename row and avoid doublets errors
-renameRowname <- function(d) {
-
-    # names.row = as.character(d[,1])
-    names.row <- rownames(d)
-    d <- d[, -1]
-    names.row <- renameRownameDoublets(names.row)
-
-    tryCatch(
-        {
-            substr(names.row, 1, MAX_CHAR_LEN) -> rownames(d)
-            return(d)
-        },
-        warning = function(w) {
-            names.row <- renameRownameDoublets(substr(names.row, 1, MAX_CHAR_LEN))
-            names.row -> rownames(d)
-            return(d)
-        },
-        error = function(e) {
-            return(d)
-        }
-    )
-}
-
-# Discard row from a reaction dataset that have the same conditions in each columns
-# x: dataframe
-discardRowCondDoublets <- function(x) {
-    row_doublets <- list()
-    j <- 0
-
-    for (i in 1:nrow(x)) {
-        # uniq remove doublets in a vector, so return 1 only if there is only 1
-        if ((length(unique(as.integer(x[i, ]))) == 1)) {
-            # print(row.names(x[i,]))
-            j <- j + 1
-            row_doublets[[j]] <- i
-        }
-    }
-
-    if (length(row_doublets) != 0) {
-        removed_reacs <- row.names(x[unlist(row_doublets), ])
-        removed_conds <- x[unlist(row_doublets), 1]
-        removed <- cbind(removed_reacs, removed_conds)
-        colnames(removed) <- c("condition", "")
-        assign("removed", removed, .GlobalEnv)
-        writeTsv("removed", v = F)
-    }
-
-    if (length(row_doublets) > 0) {
-          return(x[-unlist(row_doublets), ])
-      } else {
-          return(x)
-      }
-}
-
-# rename row and avoid doublets errors
-renameRowname <- function(d) {
-    names.row <- as.character(d[, 1])
-    d <- d[, -1]
-    names.row <- renameRownameDoublets(names.row)
-    tryCatch(
-        {
-            substr(names.row, 1, 25) -> rownames(d)
-            return(d)
-        },
-        warning = function(w) {
-            names.row <- renameRownameDoublets(substr(names.row, 1, 25))
-            names.row -> rownames(d)
-            return(d)
-        },
-        error = function(e) {
-            return(d)
-        }
-    )
-}
-
-# Discard row from a reaction dataset that have the same conditions in each columns
-# x: dataframe
-discardRowCondDoublets <- function(x) {
-    row_doublets <- list()
-    j <- 0
-    for (i in 1:nrow(x)) {
-        # uniq remove doublets in a vector, so return 1 only if there is only 1
-        if ((length(unique(as.integer(x[i, ]))) == 1)) {
-            # print(row.names(x[i,]))
-            j <- j + 1
-            row_doublets[[j]] <- i
-        }
-    }
-    if (length(row_doublets) != 0) {
-        removed_reacs <- row.names(x[unlist(row_doublets), ])
-        removed_conds <- x[unlist(row_doublets), 1]
-        removed <- cbind(removed_reacs, removed_conds)
-        colnames(removed) <- c("condition", "")
-        assign("removed", removed, .GlobalEnv)
-        writeTsv("removed", v = F)
-    }
-    if (length(row_doublets) > 0) {
-        return(x[-unlist(row_doublets), ])
-    } else {
-        return(x)
-    }
-}
-
-# Inputs: x : a matrix
-# filename of the saved file
-# Prints the matrix, save the matrix
-writeTsv <- function(x, f = NULL, cl = F, v = T) {
-    # print on stdout
-    if (isTRUE(v)) cat(paste("\n", gsub("_", " ", toupper(x)), ":\n", sep = ""))
-    # disabling warning
-    options(warn = -1)
-    # get variable
-    tab <- get(x)
-    if (!isTRUE(cl)) {
-        output <- as.matrix(rbind(c("", colnames(tab)), cbind(rownames(tab), tab)))
-    } else {
-        output <- tab
-    }
-    # discard empty rows
-    output <- output[rowSums(is.na(output)) != ncol(output), ]
-    # TODOD:
-    # output = output[,colSums(is.na(output)) != nrow(output)]
-    output[is.na(output)] <- ""
-    colnames(output) <- rep("", ncol(output))
-    rownames(output) <- rep("", nrow(output))
-    if (isTRUE(v)) {
-        if (!isTRUE(cl)) {
-            printed <- round(apply(output[-1, -1], 2, as.numeric), 2)
-            rownames(printed) <- rownames(tab)
-            colnames(printed) <- colnames(tab)
-        } else {
-            printed <- output
-        }
-        print(printed, quote = F)
-    }
-    if (is.null(f)) f <- paste(x, ".tsv", sep = "")
-    write(t(output), f, ncolumns = ncol(output), sep = "\t")
-    options(warn = 0)
-}
-
-################################
 #          Graphic
 ################################
 
@@ -488,17 +300,6 @@ colorClusters <- function(cl) {
         cl[cl == i] <- colPers(NB_CLUSTERS)[i]
     }
     return(cl)
-}
-
-# Inputs:
-# cl: clusters
-# f : filename
-# r: ordered alphabetically
-writeClusters <- function(f, v = FALSE) {
-    cluster <- cbind(sil_k[, 1], sil_k[, 3], pca$li[attr(sil_k, "iOrd"), c(1, 2)])
-    colnames(cluster) <- c("Cluster", "Silhouette", "Axis1", "Axis2")
-    assign("cluster", cluster, .GlobalEnv)
-    writeTsv("cluster", f, cl = F, v = v)
 }
 
 ############################################################
@@ -1052,19 +853,19 @@ getCtrVar <- function(k, cl, d) {
     return(ctr)
 }
 
-getCtrVar2 <- function(t, k, cl, d, scale = T) {
+getCtrVar2 <- function(k, cl, d, scale = T) {
     ctr <- getCtrVar(k, cl, d)
 
     if (isTRUE(scale)) {
-        ctr_part <- getPdis(t, k, cl, d)
+        ctr_part <- getPdis(k, cl, d)
 
         for (i in 1:nb_cl) {
-              for (j in 1:ncol(d)) {
-                    if (scale) {
-                          ctr[i, j] <- ctr[i, j] / ctr_part[j]
-                      }
+            for (j in 1:ncol(d)) {
+                if (scale) {
+                    ctr[i, j] <- ctr[i, j] / ctr_part[j]
                 }
-          }
+            }
+        }
     }
 
     return(ctr)
@@ -1073,29 +874,27 @@ getCtrVar2 <- function(t, k, cl, d, scale = T) {
 # Discriminant power (PDIS)
 # Relative contributions of the metabolites to inertia of a partitionning (in %)
 # Inputs:
-# t: number of type of classification
 # k: number of clusters
 # c: hierarchical classification
 # d: data
-getPdis <- function(t, k, cl, d) {
+getPdis <- function(k, cl, d) {
 
     # for each metabolite contribution (in column), sum the k clusters values
-    return(apply(getCtrVar(t, k, cl, d), 2, sum))
+    return(apply(getCtrVar(k, cl, d), 2, sum))
 }
 
 # Inputs:
-# t: number of type of classification
 # n: number max of clusters
 # cls: list of clusters
 # d: data
 # index: pdis or rho2 calculation
-getPdisPerPartition <- function(t, n, cls, d) {
+getPdisPerPartition <- function(n, cls, d) {
     pdis_per_partition <- matrix(NA, n - 1, ncol(d))
     rownames(pdis_per_partition) <- seq(2, n)
     colnames(pdis_per_partition) <- colnames(d)
 
     for (k in 2:n) {
-        res <- getPdis(t, k, cls[[k - 1]], d)
+        res <- getPdis(k, cls[[k - 1]], d)
         for (i in 1:length(res)) {
             pdis_per_partition[k - 1, i] <- res[i]
         }

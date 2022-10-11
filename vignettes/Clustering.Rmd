@@ -299,7 +299,7 @@ stats %>%
 ctr2 <- tibble(name = rownames(ctr), ctr = ctr[, 1])
 stats2 <- stats %>%
     as_tibble() %>%
-    dplyr::select(all_of(c("name", "p", "p.signif")))
+    select(all_of(c("name", "p", "p.signif")))
 tot <- Reduce(left_join, list(ctr2, descr, stats2)) # %>% arrange(p)
 tot <- tot %>%
     filter(p < 0.05) %>%
@@ -309,7 +309,7 @@ tot$p <- format(tot$p, scientific = TRUE, digits = 2)
 tot$p.adj <- format(tot$p.adj, scientific = TRUE, digits = 2)
 arrange(tot, desc(ctr)) %>%
     # slice(seq(n)) %>%
-    dplyr::select(-c(starts_with("n_"), contains("sd_"), "p", "p.signif"))
+    select(-c(starts_with("n_"), contains("sd_"), "p", "p.signif"))
 
 tab <- data.frame(batch = clinic_intersect$batch, group = as.numeric(cl))
 fisher_test(table(tab))
