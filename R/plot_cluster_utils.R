@@ -92,7 +92,7 @@ calculate_test <- function(x, method = "anova") {
 }
 
 #' @export
-plot_mean_test <- function(x, i, stats, color =  colors_k) {
+plot_mean_test <- function(x, i, stats, color = colors_k) {
     temp <- data.frame(
         var = as.data.frame(x[, i])[, 1],
         cl = factor(x$cl, labels = paste("Cluster", seq(unique(x$cl))))

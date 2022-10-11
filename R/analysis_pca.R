@@ -91,7 +91,7 @@ dat <- data.frame(Y = Y - min(Y)) %>%
     mutate(group = var)
 colnames(dat)[1] <- "Y"
 (res_aov <- anova_test(dat, Y ~ group))
-model  <- lm(Y ~ group, data = dat)
+model <- lm(Y ~ group, data = dat)
 ggqqplot(residuals(model))
 group_by(dat, group) %>%
     shapiro_test(Y)
@@ -126,31 +126,31 @@ ggboxplot(dat, x = "group", y = "Y", color = "group", palette = colors_var[10:12
 dat <- data.frame(Y = (Y)) %>%
     mutate(var = log1p(clinic_intersect$BMI))
 colnames(dat)[1] <- "Y"
-(model  <- lm(Y ~ var, data = dat))
+(model <- lm(Y ~ var, data = dat))
 # dat <- data.frame(Y = Y ^(1/3)) %>%
 #     mutate(var = (clinic_intersect$gender))
 # (model  <- glm(var ~ Y, data = dat, family = binomial(link = logit)))
 summary(model)
 fs <- summary(model)$fstatistic
 sub_title <- paste0(
-        "Linear regression, ",
-        "F",
-        "(",
-        paste(round(fs[2:3]), collapse = ",") ,
-        ") = ",
-        round(fs[1], 1),
-        ", ",
-        "p",
-        " = ",
-        round(summary(model)$coefficients[2, 4], 3)
-    )
+    "Linear regression, ",
+    "F",
+    "(",
+    paste(round(fs[2:3]), collapse = ","),
+    ") = ",
+    round(fs[1], 1),
+    ", ",
+    "p",
+    " = ",
+    round(summary(model)$coefficients[2, 4], 3)
+)
 ggplot(dat, aes(Y, var)) +
     geom_point() +
     stat_smooth(method = lm) +
     stat_regline_equation(label.x = 3, label.y = 7) +
     labs(subtitle = sub_title)
 ggscatter(dat, x = "Y", y = "var", add = "reg.line") +
-    stat_regline_equation(aes(label =  paste(..eq.label.., ..rr.label.., sep = "~~~~")))
+    stat_regline_equation(aes(label = paste(..eq.label.., ..rr.label.., sep = "~~~~")))
 shapiro.test(residuals(model))
 
 cls <- set_clusters(Y)
@@ -167,7 +167,8 @@ theme_perso_2D(
         gradient.cols = colors_ind,
         legend.title = "Global assessment",
         pointsize = 3
-    )) +
+    )
+) +
     labs(subtitle = sub_title) +
     theme(plot.subtitle = element_text(hjust = 0.5))
 

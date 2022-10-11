@@ -241,7 +241,7 @@ cls <- getClusterPerPart(MAX_CLUSTERS, row_dend0)
 get_summary(res_scaled, res_dist, cls, MAX_CLUSTERS, row_dend0)
 
 # Variable contribution
-100 * getCtrVar(k, cls[[k-1]], res_scaled)
+100 * getCtrVar(k, cls[[k - 1]], res_scaled)
 ctr <- getDiscriminantVariables(k, cls[[k - 1]], res_scaled, ncol(blocks))
 # rownames(ctr) <- str_sub(rownames(ctr), 1, 40) %>% snakecase::to_any_case(unique_sep = NULL, parsing_option = 3)
 plotHistogram(df = ctr)
@@ -271,16 +271,22 @@ n <- 8
     pivot_wider(names_from = cl, values_from = c(mean, sd, n))
 )
 
-stats %>% as_tibble %>% arrange(p) %>% filter(p < 0.05) %>%
+stats %>%
+    as_tibble() %>%
+    arrange(p) %>%
+    filter(p < 0.05) %>%
     adjust_pvalue(method = "BH") %>%
     add_significance(p.col = "p.adj")
 
 # for (i in as.data.frame(vars)[-c(7, 11, 12), 1]) group_by((data.frame(x = dat[, i], cl)), cl) %>% mutate(log_d = (x)) %>% shapiro_test(x) %>% print()
 
 ctr2 <- tibble(name = rownames(ctr), ctr = ctr[, 1])
-stats2 <- stats %>% as_tibble() %>% dplyr::select(all_of(c("name", "p", "p.signif")))
+stats2 <- stats %>%
+    as_tibble() %>%
+    dplyr::select(all_of(c("name", "p", "p.signif")))
 tot <- Reduce(left_join, list(ctr2, descr, stats2)) # %>% arrange(p)
-tot <- tot %>% filter(p < 0.05)  %>%
+tot <- tot %>%
+    filter(p < 0.05) %>%
     adjust_pvalue(method = "BH") %>%
     add_significance(p.col = "p.adj")
 tot$p <- format(tot$p, scientific = TRUE, digits = 2)
@@ -294,7 +300,7 @@ fisher_test(table(tab))
 pairwise_fisher_test(table(tab))
 plotHistogram(df = ctr) +
     labs(subtitle = expression(paste("Fisher test for count data (2,32), ", italic("p"), " = ", "<0.0001"))) +
-    theme(plot.subtitle=element_text(size=15, hjust=0.5, face="italic", color="black"))
+    theme(plot.subtitle = element_text(size = 15, hjust = 0.5, face = "italic", color = "black"))
 
 # Outputs
 # write.csv2(as.data.frame(cl), "clusters.temp.tsv")

@@ -53,31 +53,34 @@ theme_perso_2D <- function(p) {
 #' @param title A character string giving a graphic title
 #' @param color A vector of character giving the colors for the rows
 #' @examples
-#' df = data.frame(x = runif(30), order = 30:1)
+#' df <- data.frame(x = runif(30), order = 30:1)
 #' library("ggplot2")
-#' p = ggplot(df, aes(order, x))
+#' p <- ggplot(df, aes(order, x))
 #' plotHistogram(p, df, "This is my title", "red")
 #' # Add colors per levels of a variable
-#' df$color = rep(c(1,2,3), each=10)
-#' p = ggplot(df, aes(order, x, fill = color))
+#' df$color <- rep(c(1, 2, 3), each = 10)
+#' p <- ggplot(df, aes(order, x, fill = color))
 #' plotHistogram(p, df, "Histogram", as.character(df$color))
 #' @export plotHistogram
-plotHistogram = function(p = NULL, df = NULL, hjust = 0, vjust = 0.5, n = 100, title = "", color = "black", color_gradient = Reds(2)){
-    if(is.null(p)) {
+plotHistogram <- function(p = NULL, df = NULL, hjust = 0, vjust = 0.5, n = 100, title = "", color = "black", color_gradient = Reds(2)) {
+    if (is.null(p)) {
         df0 <- as.data.frame(df)
         colnames(df0)[1] <- "val"
         if (n < nrow(df0)) {
             n <- nrow(df0)
         }
-        df <- (df0 %>%
-                   arrange(desc(val)) %>%
-                   mutate(order = rev(seq(nrow(df0))))
+        df <- (
+            df0 %>%
+            arrange(desc(val)) %>%
+            mutate(order = rev(seq(nrow(df0)))
+            )
         )[seq(n), ]
-        p <- ggplot(df, aes(order, val, fill = order)) + theme_classic()
+        p <- ggplot(df, aes(order, val, fill = order)) +
+            theme_classic()
     }
     p +
-        #TODO: if NB_ROW > X, uncomment this
-        #geom_hline(yintercept = c(-.5,.5), col="grey", linetype="dotted", size=1) +
+        # TODO: if NB_ROW > X, uncomment this
+        # geom_hline(yintercept = c(-.5,.5), col="grey", linetype="dotted", size=1) +
         geom_hline(yintercept = 0, col = "grey", size = 1) +
         geom_bar(stat = "identity") +
         coord_flip() +
@@ -85,7 +88,8 @@ plotHistogram = function(p = NULL, df = NULL, hjust = 0, vjust = 0.5, n = 100, t
         labs(
             title = title,
             x = "", y = "",
-            fill = "Cluster") +
+            fill = "Cluster"
+        ) +
         # theme_classic() +
         # theme_perso() +
         theme(
@@ -95,31 +99,32 @@ plotHistogram = function(p = NULL, df = NULL, hjust = 0, vjust = 0.5, n = 100, t
             axis.ticks = element_blank(),
             plot.subtitle = element_text(hjust = 0.5, size = 16, face = "italic")
         ) +
-        geom_text(aes(label=round(..y.., 2)), hjust = hjust, vjust = vjust) +
+        geom_text(aes(label = round(..y.., 2)), hjust = hjust, vjust = vjust) +
         theme(legend.position = "none") +
         scale_fill_gradient(low = color_gradient[1], high = color_gradient[2])
 }
 
 #' Default font for plots
-theme_perso = function() {
-
+theme_perso <- function() {
     theme(
         legend.text = element_text(size = 13),
-        legend.title = element_text(face="bold.italic", size=16),
-        plot.title = element_text(size = 25, face = "bold", hjust=0.5, margin = margin(0,0,20,0))
+        legend.title = element_text(face = "bold.italic", size = 16),
+        plot.title = element_text(size = 25, face = "bold", hjust = 0.5, margin = margin(0, 0, 20, 0))
     )
 }
 
 set_clusters <- function(Y) {
     cls <- read.csv2("clusters_som2.temp.tsv")
     k <- length(unique(cls[, 2]))
-    if(!is.null(names(Y)))
-        cl <- left_join(data.frame(Y, X = as.double(names(Y))), cls)[, 3]
-    else
-        cl <- left_join(data.frame(X = as.double(rownames(blocks))), cls)[, 2]
+    if (!is.null(names(Y))) {
+          cl <- left_join(data.frame(Y, X = as.double(names(Y))), cls)[, 3]
+      } else {
+          cl <- left_join(data.frame(X = as.double(rownames(blocks))), cls)[, 2]
+      }
     colors_k <- brewer.pal(n = 9, name = "Set1")[seq(k) + 2]
-    if (k > 2)
-        colors_k <- c(colors_k[seq(2)], "red", colors_k[3])
+    if (k > 2) {
+          colors_k <- c(colors_k[seq(2)], "red", colors_k[3])
+      }
 
     return(list(cl = cl, colors_k = colors_k, k = k))
 }
