@@ -1,4 +1,5 @@
 block_name <- "clinic_qual"
+to_remove <- NULL
 source(file.path(golem::get_golem_wd(), "R", "set_analysis.R"))
 source(file.path(golem::get_golem_wd(), "R", "plot_utils.R"))
 colPers <- rev(colors_ind[3:2])

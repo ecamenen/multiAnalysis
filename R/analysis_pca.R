@@ -4,6 +4,7 @@ libs <- c(
     "factoextra",
     "rstatix"
 )
+to_remove <- c("1007", "1014")
 source(file.path(golem::get_golem_wd(), "R", "set_analysis.R"))
 source(file.path(golem::get_golem_wd(), "R", "plot_utils.R"))
 colPers <- rev(colors_ind[3:2])

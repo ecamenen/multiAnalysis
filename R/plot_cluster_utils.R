@@ -92,7 +92,7 @@ calculate_test <- function(x, method = "anova") {
 }
 
 #' @export
-plot_mean_test <- function(x, i, stats, color = colors_k) {
+plot_mean_test <- function(x, i, stats, color = c("red", "blue")) {
     temp <- data.frame(
         var = as.data.frame(x[, i])[, 1],
         cl = factor(x$cl, labels = paste("Cluster", seq(unique(x$cl))))
@@ -118,7 +118,7 @@ plot_mean_test <- function(x, i, stats, color = colors_k) {
         # ggpubr::stat_pvalue_manual(stats, label = "2.3e-08***")
 }
 
-get_summary <- function(res_scaled, res_dist, cls, MAX_CLUSTERS, row_dend0 = NULL) {
+get_summary <- function(res_scaled, res_dist, cls, MAX_CLUSTERS, row_dend0 = NULL, k = 2) {
     sils <- getSilhouettePerPart(res_scaled, cls, res_dist)
     mean_sil <- getMeanSilhouettePerPart(sils)
     # plotSilhouettePerPart(mean_sil)
@@ -144,6 +144,7 @@ get_summary <- function(res_scaled, res_dist, cls, MAX_CLUSTERS, row_dend0 = NUL
     }
     print(summary)
     sil_k <- sils[[k - 1]]
+    colors_k <- brewer.pal(n = 9, name = "Set1")[seq(k) + 2]
     # plotSilhouette(sil_k)
     # abline(v = mean(sil_k[, 3]), col = "red", lwd = 2, lty = 1)
     plot_silhouette(sil_k, colors_k)

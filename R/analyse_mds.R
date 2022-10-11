@@ -1,4 +1,5 @@
 block_name <- "clinic_still_processed"
+to_remove <- NULL
 source(file.path(golem::get_golem_wd(), "R", "set_analysis.R"))
 source(file.path(golem::get_golem_wd(), "R", "plot_utils.R"))
 blocks <- blocks[[1]] %>% select(-c("eye_manifestations"))

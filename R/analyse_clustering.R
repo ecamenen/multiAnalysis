@@ -5,6 +5,7 @@ hc_metric <- "pearson"
 hc_index <- "silhouette"
 k <- 2
 n_boot <- 1000
+to_remove <- c("1007", "1014")
 source(file.path(golem::get_golem_wd(), "R", "set_analysis.R"))
 source(file.path(golem::get_golem_wd(), "R", "plot_cluster_utils.R"))
 source(file.path(golem::get_golem_wd(), "R", "cluster_utils.R"))
@@ -238,7 +239,7 @@ heatmap(
 plotGapPerPart(gaps, MAX_CLUSTERS)
 plotFusionLevels(MAX_CLUSTERS, row_dend0)
 cls <- getClusterPerPart(MAX_CLUSTERS, row_dend0)
-get_summary(res_scaled, res_dist, cls, MAX_CLUSTERS, row_dend0)
+get_summary(res_scaled, res_dist, cls, MAX_CLUSTERS, row_dend0, k = k)
 
 # Variable contribution
 100 * getCtrVar(k, cls[[k - 1]], res_scaled)
@@ -257,7 +258,7 @@ n <- 6
 dat <- as.data.frame(clinic_intersect[, colnames(blocks)]) %>%
     cbind(cl = as.character(cl))
 stats <- calculate_test(dat)
-plot_mean_test(dat, "physician_global_assessment", as_tibble(stats))
+plot_mean_test(dat, "physician_global_assessment", as_tibble(stats), colors_k)
 
 n <- 8
 (descr <- pivot_longer(dat, !cl) %>%
@@ -311,7 +312,7 @@ classif <- getClassif(2, MAX_CLUSTERS, res_scaled, res_dist)
 # classif <- lapply(2:MAX_CLUSTERS, function(i) pam(res_dist0, i, diss = TRUE))
 classif[[k]]$data <- res_scaled
 cls <- getClusterPerPart(MAX_CLUSTERS, classif)
-get_summary(res_scaled, res_dist, cls, MAX_CLUSTERS)
+get_summary(res_scaled, res_dist, cls, MAX_CLUSTERS, k = k)
 
 fviz_cluster(
     classif[[k]],

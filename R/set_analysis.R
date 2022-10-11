@@ -4,6 +4,9 @@ if (!exists("libs")) {
 if (!exists("block_name")) {
     block_name <- "blocks_clinic"
 }
+if (!exists("to_remove")) {
+    to_remove <- NULL
+}
 
 # path <- "~/bin/MultiOmics4ImmunAID/data/"
 path <- file.path(golem::get_golem_wd(), "data")
@@ -23,9 +26,10 @@ blocks <- get(block_name)
 
 # to_remove <- c("2003", "7006", "10003", "14004", "20014", "20012", "25012")
 # to_remove <- c("20004", "20005", "26105")
-to_remove <- c("1007", "1014")
-# i_row <- which(rownames(blocks[[1]]) %in% to_remove)
-# blocks <- lapply(blocks, function(i) i[-i_row, ])
+if (!is.null(to_remove)) {
+    i_row <- which(rownames(blocks[[1]]) %in% to_remove)
+    blocks <- lapply(blocks, function(i) i[-i_row, ])
+}
 # colnames(blocks[[1]])[which(colnames(blocks[[1]]) == "neutrophils_5")] <- "neutrophils_%"
 
 load(file.path(path, "clinic_transf.rda"))

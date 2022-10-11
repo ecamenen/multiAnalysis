@@ -1,5 +1,6 @@
 block_name <- "clinic_still_processed"
 hc_metric <- "pearson"
+to_remove <- c("1007", "1014")
 source(file.path(golem::get_golem_wd(), "R", "set_analysis.R"))
 source(file.path(golem::get_golem_wd(), "R", "cluster_utils.R"))
 source(file.path(golem::get_golem_wd(), "R", "plot_cluster_utils.R"))
@@ -50,7 +51,7 @@ if (MAX_CLUSTERS > n) {
   }
 classif <- getClassif(2, MAX_CLUSTERS, som_codes_scaled, res_dist)
 cls <- getClusterPerPart(MAX_CLUSTERS, classif)
-get_summary(som_codes_scaled, res_dist, cls, MAX_CLUSTERS)
+get_summary(som_codes_scaled, res_dist, cls, MAX_CLUSTERS, k = k)
 # res0 <- pvclust(
 #   t(som_codes_scaled),
 #   method.hclust = hc_method,
