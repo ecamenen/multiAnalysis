@@ -1,0 +1,25 @@
+utils::globalVariables(
+    c(
+        "<<-",
+        ".",
+        "..y..",
+        "ADVANCED",
+        "blocks",
+        "cl",
+        "classif",
+        "clinic_intersect",
+        "clinic_transf",
+        "dist.binary",
+        "dmat.color",
+        "HEAD",
+        "immun_aid_identifier",
+        "name",
+        "nb_cl",
+        "pivot_longer",
+        "plotcolors",
+        "reorder.hclust",
+        "s.class",
+        "sil_k",
+        "val"
+    )
+)
