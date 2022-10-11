@@ -633,7 +633,7 @@ plotSilhouettePerPart = function(mean_silhouette){
   #savePdf(opt$output1)
   optimal_nb_clusters = which.max(mean_silhouette)+1
   plot(2:(length(mean_silhouette)+1), mean_silhouette, type="b", xlim=c(2,length(mean_silhouette)+2), ylim=c(0,max(mean_silhouette)+0.1), col="grey", xlab="Nb. of clusters", ylab="Average silhouette width", axes=F)
-  plotBestClustering("Silhouette method", mean_silhouette,"n average width", optimal_nb_clusters, 0.1, n = length(mean_silhouette))
+  plotBestClustering("Silhouette method", mean_silhouette,"n average width", optimal_nb_clusters, 0.1, n = (length(mean_silhouette) + 1))
   #suprLog = dev.off()
   #return (optimal_nb_clusters)
 }

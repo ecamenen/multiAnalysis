@@ -82,25 +82,26 @@ save_tiff <- function(f, filename = "violinplot_clin.tiff") {
 }
 
 #' @export
-calculate_test <- function(x) {
+calculate_test <- function(x, method = "anova") {
     df <- pivot_longer(x, !cl) %>%
         group_by(name) %>%
-        wilcox_test(value ~ cl) %>%
+        # filter(!is.na(value)) %>%
+        base::get(paste0(method, "_test"))(value ~ cl) %>%
         add_significance()
     return(df)
 }
 
 #' @export
-plot_mean_test <- function(x, i, stats, color = colors_var[c(12, 14)]) {
+plot_mean_test <- function(x, i, stats, color =  colors_k) {
     temp <- data.frame(
         var = as.data.frame(x[, i])[, 1],
-        cl = factor(x$cl, labels = paste("Cluster", seq(2)))
+        cl = factor(x$cl, labels = paste("Cluster", seq(unique(x$cl))))
     )
-    stats <- stats %>%
-        filter(name == i) %>%
-        add_xy_position(x = "cl")
-    stats$y.position <- max(temp[, 1], na.rm = TRUE) + 1
-    stats$p <- format(stats$p, scientific = TRUE, digits = 2)
+    # stats <- stats %>%
+    #     filter(name == i) %>%
+    #     add_xy_position(x = "cl")
+    # stats$y.position <- max(temp[, 1], na.rm = TRUE) + 1
+    # stats$p <- format(stats$p, scientific = TRUE, digits = 2)
     ggbetweenstats(
         temp,
         cl,
@@ -113,8 +114,8 @@ plot_mean_test <- function(x, i, stats, color = colors_var[c(12, 14)]) {
             axis.ticks.x = element_blank(),
             axis.line.x = element_line(color = "white")
         ) +
-        scale_color_manual(values = color) +
-        ggpubr::stat_pvalue_manual(stats, label = "1.4e-03 {p.signif}")
+        scale_color_manual(values = color) #+
+        # ggpubr::stat_pvalue_manual(stats, label = "2.3e-08***")
 }
 
 get_summary <- function(res_scaled, res_dist, cls, MAX_CLUSTERS, row_dend0 = NULL) {

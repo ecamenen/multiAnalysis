@@ -1,16 +1,5 @@
 # Environment
-libs <- c(
-    "FactoMineR",
-    "factoextra",
-    "RColorBrewer",
-    "cluster",
-    "NbClust",
-    "dendextend",
-    "heatmaply",
-    "pheatmap",
-    "pvclust"
-)
-block_name <- "blocks_clinic"
+block_name <- "clinic_still_processed"
 hc_method <- "ward.D2"
 hc_metric <- "pearson"
 hc_index <- "silhouette"
@@ -25,17 +14,17 @@ MAX_CLUSTERS <- 6
 colors_k <- brewer.pal(n = 9, name = "Set1")[seq(k) + 2]
 
 names_levels <- str_replace(levels(disease), " \\(.+\\)", "")
-# names_levels <- c("Still", "Control")
+# names_levels <- c("Still", "Control", "SOJIA")
 row_annotation <- data.frame(
     Disease = factor(disease, labels = names_levels)
 )
-
+blocks <- blocks[[1]] %>% select(-c("eye_manifestations", "cardiac_manifestations")) # %>% select(-c("gender", "BMI", "age_at_inclusion_time", "batch"))
 # Data preparation
-res_scaled_na0 <- scale(blocks[[1]])
+res_scaled_na0 <- scale(blocks)
 res_scaled0 <- res_scaled_na0
 res_scaled0[is.na(res_scaled0)] <- 0
 
-res_scaled_na <- heatmaply::normalize(blocks[[1]])
+res_scaled_na <- heatmaply::normalize(blocks)
 res_scaled <- res_scaled_na
 res_scaled[is.na(res_scaled)] <- 0
 
@@ -179,8 +168,8 @@ fviz_cluster(
 # )
 
 # Heatmap
-row_dend <- color_dendrogram(res_clus, k = k) %>% sort()
-col_dend <- color_dendrogram(res_clus_var, k = k) %>% sort()
+row_dend <- color_dendrogram(res_clus, k = k, colors = colors_k) %>% sort()
+col_dend <- color_dendrogram(res_clus_var, k = 2, colors = c("#f03088", "#d9d52c")) %>% sort()
 
 heatmaply(
     res_scaled_na,
@@ -200,6 +189,8 @@ heatmaply(
     RowSideColors = factor(disease, labels = names_levels),
     plot_method = "plotly",
     colorbar_xpos = 1.025,
+    fontsize_row = 20,
+    fontsize_col = 20,
     # na.rm = FALSE,
     key.title = "Disease"
     # side_color_layers,
@@ -266,8 +257,9 @@ n <- 6
 dat <- as.data.frame(clinic_intersect[, colnames(blocks)]) %>%
     cbind(cl = as.character(cl))
 stats <- calculate_test(dat)
-plot_mean_test(dat, "neutrophils", stats)
+plot_mean_test(dat, "physician_global_assessment", as_tibble(stats))
 
+n <- 8
 (descr <- pivot_longer(dat, !cl) %>%
     group_by(name, cl) %>%
     summarise(
@@ -279,11 +271,16 @@ plot_mean_test(dat, "neutrophils", stats)
     pivot_wider(names_from = cl, values_from = c(mean, sd, n))
 )
 
+stats %>% as_tibble %>% arrange(p) %>% filter(p < 0.05) %>%
+    adjust_pvalue(method = "BH") %>%
+    add_significance(p.col = "p.adj")
+
+# for (i in as.data.frame(vars)[-c(7, 11, 12), 1]) group_by((data.frame(x = dat[, i], cl)), cl) %>% mutate(log_d = (x)) %>% shapiro_test(x) %>% print()
+
 ctr2 <- tibble(name = rownames(ctr), ctr = ctr[, 1])
-stats2 <- stats %>% dplyr::select(all_of(c("name", "p", "p.signif")))
+stats2 <- stats %>% as_tibble() %>% dplyr::select(all_of(c("name", "p", "p.signif")))
 tot <- Reduce(left_join, list(ctr2, descr, stats2)) # %>% arrange(p)
-tot <- tot %>%
-    slice(seq(n)) %>%
+tot <- tot %>% filter(p < 0.05)  %>%
     adjust_pvalue(method = "BH") %>%
     add_significance(p.col = "p.adj")
 tot$p <- format(tot$p, scientific = TRUE, digits = 2)
@@ -300,7 +297,7 @@ plotHistogram(df = ctr) +
     theme(plot.subtitle=element_text(size=15, hjust=0.5, face="italic", color="black"))
 
 # Outputs
-write.csv2(as.data.frame(cl), "clusters.temp.tsv")
+# write.csv2(as.data.frame(cl), "clusters.temp.tsv")
 
 # NHC
 classif <- getClassif(2, MAX_CLUSTERS, res_scaled, res_dist)
