@@ -4,21 +4,61 @@
 \name{blocks}
 \alias{blocks}
 \alias{clinic}
-\alias{blocks_clinic}
+\alias{clinic_control_still}
+\alias{clinic_qual}
+\alias{clinic_still_log}
+\alias{clinic_still_log_proc}
+\alias{clinic_still_processed}
+\alias{clinic_still_raw}
+\alias{clinic_still_transformed}
+\alias{clinic_transf}
+\alias{som_model}
 \title{Blocks}
 \format{
+An object of class \code{list} of length 2.
+
+An object of class \code{tbl_df} (inherits from \code{tbl}, \code{data.frame}) with 213 rows and 865 columns.
+
 An object of class \code{list} of length 1.
 
-An object of class \code{tbl_df} (inherits from \code{tbl}, \code{data.frame}) with 213 rows and 118 columns.
+An object of class \code{data.frame} with 39 rows and 53 columns.
 
 An object of class \code{list} of length 1.
+
+An object of class \code{list} of length 1.
+
+An object of class \code{list} of length 1.
+
+An object of class \code{list} of length 1.
+
+An object of class \code{list} of length 1.
+
+An object of class \code{tbl_df} (inherits from \code{tbl}, \code{data.frame}) with 213 rows and 866 columns.
+
+An object of class \code{kohonen} of length 13.
 }
 \usage{
 data(blocks)
 
 data(clinic)
 
-data(blocks_clinic)
+data(clinic_control_still)
+
+data(clinic_qual)
+
+data(clinic_still_log)
+
+data(clinic_still_log_proc)
+
+data(clinic_still_processed)
+
+data(clinic_still_raw)
+
+data(clinic_still_transformed)
+
+data(clinic_transf)
+
+data(som_model)
 }
 \description{
 Tables of omics and clinic from the ImmunAID project (H2020) for
