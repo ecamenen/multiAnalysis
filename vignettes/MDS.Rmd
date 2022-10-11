@@ -1,7 +1,24 @@
-block_name <- "clinic_still_processed"
-to_remove <- NULL
-source(file.path(golem::get_golem_wd(), "R", "set_analysis.R"))
-source(file.path(golem::get_golem_wd(), "R", "plot_utils.R"))
+---
+title: "MDS"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{MDS}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+    collapse = TRUE,
+    comment = "#>"
+)
+```
+
+```{r setup}
+library(multiAnalysis)
+```
+```{r}
+set_analysis(block_name = "clinic_still_processed")
 blocks <- blocks[[1]] %>% select(-c("eye_manifestations"))
 hc_metric <- "pearson"
 ncomp <- 2
@@ -49,7 +66,7 @@ res_rgcca$a[[1]] <- ctr
 
 plot_var_2D(res_rgcca, i_block = 1, cex_lab = 15, resp = ctr[, 1], n_mark = 50, remove_var = FALSE)
 plot_ind(res_rgcca, i_block = 1, resp = disease, cex_lab = 15, colors = colors_var[seq(2) + 9])
-cls <- read.csv2("clusters_som2.temp.tsv")
+path <- file.path(golem::get_golem_wd())
 
 cls <- set_clusters(mds$points[, 1])
 cl <- cls$cl
@@ -102,3 +119,4 @@ clinic_intersect %>%
     select(c("age_at_inclusion_time", "BMI", "gender", "batch")) %>%
     mutate(gender0 = as.numeric(as.character(factor(gender, labels = c(1, 0))))) %>%
     select(-gender)
+```

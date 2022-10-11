@@ -1,12 +1,26 @@
-block_name <- "clinic_still_processed"
-hc_metric <- "pearson"
-to_remove <- c("1007", "1014")
-source(file.path(golem::get_golem_wd(), "R", "set_analysis.R"))
-source(file.path(golem::get_golem_wd(), "R", "cluster_utils.R"))
-source(file.path(golem::get_golem_wd(), "R", "plot_cluster_utils.R"))
-blocks <- blocks[[1]]
+---
+title: "SOM"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{SOM}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
 
-library("kohonen")
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+    collapse = TRUE,
+    comment = "#>"
+)
+```
+
+```{r setup}
+library(multiAnalysis)
+```
+```{r}
+set_analysis(block_name = "clinic_still_processed", to_remove = c("1007", "1014"))
+hc_metric <- "pearson"
+blocks <- blocks[[1]]
 n_run <- 100000
 MAX_CLUSTERS <- 6
 
@@ -37,7 +51,8 @@ som_grid <- somgrid(
     ydim = 4,
     topo = "hexagonal"
 )
-load("~/som_model.RData")
+path <- file.path(golem::get_golem_wd())
+load(file.path(path, "data", "som_model.RData"))
 # som_model <- som(as.matrix(res_scaled), grid = som_grid, rlen = n_run)
 plot(som_model, type = "changes")
 
@@ -62,7 +77,7 @@ get_summary(som_codes_scaled, res_dist, cls, MAX_CLUSTERS, k = k)
 # ) %>% suppressWarnings()
 # plot_dendrogram(res0, k = k, color = colors_k)
 # som_clusters <- cls[[k - 1]]
-som_clusters <- read.csv2("clusters0.temp.tsv")$cl0
+som_clusters <- read.csv2(file.path(path, "clusters0.temp.tsv"))$cl0
 ind_clusters <- som_clusters[som_model$unit.classif]
 names(ind_clusters) <- rownames(res_scaled_na)
 
@@ -86,3 +101,4 @@ par(mfrow = c(1, 1))
 # plot(som_model, type = "codes", palette.name = rainbow, codeRendering = "segments")
 
 # write.csv2(as.data.frame(ind_clusters), "clusters_som2.temp.tsv")
+```

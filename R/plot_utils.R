@@ -1,5 +1,3 @@
-options(ggrepel.max.overlaps = Inf)
-
 #' @export
 theme_perso0 <- function(p) {
     axis <- element_text(
@@ -71,9 +69,8 @@ plotHistogram <- function(p = NULL, df = NULL, hjust = 0, vjust = 0.5, n = 100, 
         }
         df <- (
             df0 %>%
-            arrange(desc(val)) %>%
-            mutate(order = rev(seq(nrow(df0)))
-            )
+                arrange(desc(val)) %>%
+                mutate(order = rev(seq(nrow(df0))))
         )[seq(n), ]
         p <- ggplot(df, aes(order, val, fill = order)) +
             theme_classic()
@@ -105,6 +102,7 @@ plotHistogram <- function(p = NULL, df = NULL, hjust = 0, vjust = 0.5, n = 100, 
 }
 
 #' Default font for plots
+#' @export
 theme_perso <- function() {
     theme(
         legend.text = element_text(size = 13),
@@ -113,22 +111,25 @@ theme_perso <- function() {
     )
 }
 
+#' @export
 set_clusters <- function(Y) {
-    cls <- read.csv2("clusters_som2.temp.tsv")
+    path <- file.path(golem::get_golem_wd())
+    cls <- read.csv2(file.path(path, "clusters_som2.temp.tsv"))
     k <- length(unique(cls[, 2]))
     if (!is.null(names(Y))) {
-          cl <- left_join(data.frame(Y, X = as.double(names(Y))), cls)[, 3]
-      } else {
-          cl <- left_join(data.frame(X = as.double(rownames(blocks))), cls)[, 2]
-      }
+        cl <- left_join(data.frame(Y, X = as.double(names(Y))), cls)[, 3]
+    } else {
+        cl <- left_join(data.frame(X = as.double(rownames(blocks))), cls)[, 2]
+    }
     colors_k <- brewer.pal(n = 9, name = "Set1")[seq(k) + 2]
     if (k > 2) {
-          colors_k <- c(colors_k[seq(2)], "red", colors_k[3])
-      }
+        colors_k <- c(colors_k[seq(2)], "red", colors_k[3])
+    }
 
     return(list(cl = cl, colors_k = colors_k, k = k))
 }
 
+#' @export
 get_ctr <- function(x, i = "var") {
     x <- x[[i]]$contrib
     sapply(

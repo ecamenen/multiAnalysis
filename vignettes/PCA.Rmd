@@ -1,14 +1,24 @@
-set_analysis(
-    block_name = "clinic_still_processed",
-    libs = c(
-        "FactoMineR",
-        "factoextra",
-        "rstatix"
-    ),
-    to_remove = c("1007", "1014")
+---
+title: "PCA"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{PCA}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+    collapse = TRUE,
+    comment = "#>"
 )
-source(file.path(golem::get_golem_wd(), "R", "set_analysis.R"))
-source(file.path(golem::get_golem_wd(), "R", "plot_utils.R"))
+```
+
+```{r setup}
+library(multiAnalysis)
+```
+```{r}
+set_analysis(block_name = "clinic_still_processed", to_remove = c("1007", "1014"))
 colPers <- rev(colors_ind[3:2])
 blocks <- blocks[[1]]
 
@@ -17,7 +27,7 @@ res_pca <- PCA(blocks, scale.unit = TRUE, ncp = 3, grap = FALSE) %>%
 var <- as.factor(clinic_intersect$gender)
 
 Y <- res_pca$ind$coord[, 1]
-
+n <- length(levels(var))
 dat <- data.frame(Y = Y - min(Y)) %>%
     mutate(group = var)
 colnames(dat)[1] <- "Y"
@@ -208,3 +218,4 @@ theme_perso_2D(
         select.var = list(name = names(unlist(ctr[1:2])))
     ) + scale_shape_manual(values = rep(19, k))
 )
+```

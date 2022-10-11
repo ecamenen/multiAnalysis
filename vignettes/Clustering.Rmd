@@ -1,15 +1,30 @@
+---
+title: "Clustering"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Clustering}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+    collapse = TRUE,
+    comment = "#>"
+)
+```
+
+```{r setup}
+library(multiAnalysis)
+```
+```{r}
 # Environment
-block_name <- "clinic_still_processed"
+set_analysis(block_name = "clinic_still_processed", to_remove = c("1007", "1014"))
 hc_method <- "ward.D2"
 hc_metric <- "pearson"
 hc_index <- "silhouette"
 k <- 2
 n_boot <- 1000
-to_remove <- c("1007", "1014")
-source(file.path(golem::get_golem_wd(), "R", "set_analysis.R"))
-source(file.path(golem::get_golem_wd(), "R", "plot_cluster_utils.R"))
-source(file.path(golem::get_golem_wd(), "R", "cluster_utils.R"))
-source(file.path(golem::get_golem_wd(), "R", "plot_utils.R"))
 
 MAX_CLUSTERS <- 6
 colors_k <- brewer.pal(n = 9, name = "Set1")[seq(k) + 2]
@@ -324,3 +339,4 @@ fviz_cluster(
     main = "Factor map",
     ellipse.type = "norm"
 ) + theme_classic()
+```

@@ -442,6 +442,7 @@ getCNH <- function(t, df, d, k) {
     }
 }
 
+#' @export
 getClassif <- function(t, n, df, d) {
     if (t > 2) {
         getCAH(t, df, d)
@@ -470,6 +471,7 @@ getClusters <- function(k, c) {
     }
 }
 
+#' @export
 getClusterPerPart <- function(n, c) {
     cl <- list()
     for (k in 2:n) {
@@ -607,6 +609,7 @@ plotBetweenDiff <- function(between_diff) {
     # suprLog = dev.off()
 }
 
+#' @export
 plotFusionLevels <- function(n, c) {
     if (isTRUE(VERBOSE)) cat("\nFUSION LEVELS:\n")
     fusion <- rev(c$height)
@@ -700,7 +703,7 @@ getGapPerPart <- function(n, d, c, B = 500, v = F) {
     if (classif$method == "kmeans" | nrow(d) >= 100) cat(paste("It could take a ", plural[1], "minute", plural[2], "...\n", sep = ""))
 
     gapFun <- function(x, k) list(cluster = getClusters(k, c))
-    clusGap(d, FUN = gapFun, K.max = n, verbose = F, B = B)
+    clusGap(d, FUNcluster = gapFun, K.max = n, verbose = F, B = B)
 }
 
 # g: gap object
@@ -710,6 +713,7 @@ getGapBest <- function(g, M = "Tibs2001SEmax") {
 
 # Plot the gap statistics width for all clustering possible
 # TODO: HERE
+#' @export
 plotGapPerPart <- function(g, n, v = T) {
     setGraphic()
     # savePdf("gap_statistics.pdf")
@@ -1028,6 +1032,7 @@ getDistPerVariable <- function(d, cl) {
 # k: number of clusters
 # c: hierarchical classification
 # d: data
+#' @export
 getCtrVar <- function(k, cl, d) {
 
     # if NA values appear, scale 0/0 could produce NA values, NA could correspond to 0
@@ -1098,10 +1103,7 @@ getPdisPerPartition <- function(t, n, cls, d) {
     return(pdis_per_partition)
 }
 
-
-
-
-
+#' @export
 getDiscriminantVariables <- function(n, cl, d, m) {
     if (m > ncol(d)) {
           m <- ncol(d)

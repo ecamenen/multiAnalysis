@@ -10,7 +10,7 @@ plot_dendrogram <- function(
     color = c("indianred1", "darkseagreen", "steelblue"),
     color_bar = color
 ) {
-    x0 <- color_dendrogram(x, k = k, color = color) %>%
+    x0 <- color_dendrogram(x, k = k, colors = color) %>%
         set("labels_cex", 0.8)
     plot(
         x0,
@@ -118,6 +118,7 @@ plot_mean_test <- function(x, i, stats, color = c("red", "blue")) {
         # ggpubr::stat_pvalue_manual(stats, label = "2.3e-08***")
 }
 
+#' @export
 get_summary <- function(res_scaled, res_dist, cls, MAX_CLUSTERS, row_dend0 = NULL, k = 2) {
     sils <- getSilhouettePerPart(res_scaled, cls, res_dist)
     mean_sil <- getMeanSilhouettePerPart(sils)

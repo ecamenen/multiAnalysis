@@ -1,7 +1,25 @@
-block_name <- "clinic_qual"
-to_remove <- NULL
-source(file.path(golem::get_golem_wd(), "R", "set_analysis.R"))
-source(file.path(golem::get_golem_wd(), "R", "plot_utils.R"))
+---
+title: "MCA"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{MCA}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+    collapse = TRUE,
+    comment = "#>"
+)
+```
+
+```{r setup}
+library(multiAnalysis)
+```
+```{r}
+
+set_analysis(block_name = "clinic_qual")
 colPers <- rev(colors_ind[3:2])
 blocks <- mutate_all(blocks, as.character) %>%
     select(-c(starts_with("treatment_group"), starts_with("consent_signed_by"), "country"))
@@ -181,3 +199,4 @@ temp0 <- data.frame(cls = as.character(cl), blocks) %>%
 lapply(seq_along(blocks), function(i) chisq_test(na.omit(cl), as.data.frame(temp0[i, ]$data)[, 1])) %>%
     Reduce(rbind, .) %>%
     cbind(colnames(blocks), .)
+```

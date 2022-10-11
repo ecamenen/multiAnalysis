@@ -1,7 +1,24 @@
-block_name <- "blocks"
-libs <- c("RGCCA")
-source(file.path(golem::get_golem_wd(), "R", "set_analysis.R"))
+---
+title: "RGCCA"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{RGCCA}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
 
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+    collapse = TRUE,
+    comment = "#>"
+)
+```
+
+```{r setup}
+library(multiAnalysis)
+```
+```{r}
+set_analysis(block_name = "blocks")
 n <- length(blocks)
 res <- rgcca(blocks, ncomp = 2, response = n) # tau = "optimal"
 plot_ave(res)
@@ -119,3 +136,4 @@ plot_ind0("diseases", colors = colors)
 
 
 # eval <- rgcca_cv_k(res, validation = "loo", detectCores())
+```
