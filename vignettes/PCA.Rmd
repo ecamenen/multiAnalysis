@@ -14,40 +14,26 @@ knitr::opts_chunk$set(
 )
 ```
 
+# Setup
 ```{r setup}
 library(multiAnalysis)
-```
-```{r}
-set_analysis(block_name = "clinic_still_processed", to_remove = c("1007", "1014"))
+set_analysis(block_name = "clinic_tot_raw", to_remove = "26102")
 colPers <- rev(colors_ind[3:2])
-blocks <- blocks[[1]]
-
-res_pca <- PCA(blocks, scale.unit = TRUE, ncp = 3, grap = FALSE) %>%
-    suppressWarnings()
-var <- as.factor(clinic_intersect$gender)
-
-Y <- res_pca$ind$coord[, 1]
-n <- length(levels(var))
-dat <- data.frame(Y = Y - min(Y)) %>%
-    mutate(group = var)
-colnames(dat)[1] <- "Y"
-(res_aov <- anova_test(dat, Y ~ group))
-theme_perso_2D(
-    fviz_pca_ind(
-        res_pca,
-        geom.ind = "text",
-        col.ind = var,
-        palette = colors_var[10:(10 + n)],
-        addEllipses = TRUE,
-        legend.title = "Batch",
-        pointsize = 3
+vars2 <- c("immun_aid_identifier", "weight", "height") # , "fatigue")
+blocks <- blocks[[1]] %>% select(
+    -c(
+        vars2,
+        # ends_with("_global_assessment"),
+        ends_with("_upper_limit_of_normal"),
+        starts_with("max_")
     )
-) + scale_shape_manual(values = rep(19, n)) +
-    labs(subtitle = get_test_label(res_aov, detailed = TRUE)) +
-    theme(plot.subtitle = element_text(hjust = 0.5))
+)
 
+res_pca <- PCA(blocks, scale.unit = TRUE, ncp = 3, graph = FALSE)
+```
 
-(fviz_contrib(res_pca, choice = "ind", axes = 1, top = 50)) %>% theme_histo()
+# Scree plot
+```{r scree}
 tibble(res_pca$eig)
 fviz_eig(
     res_pca,
@@ -56,8 +42,11 @@ fviz_eig(
     hjust = 0.5,
     ggtheme = theme_classic()
 ) %>% theme_perso0()
+```
 
 # Variables
+```{r var}
+corrplot(t(res_pca$var$contrib), is.corr = FALSE, col = colorRampPalette(c(colPers, "black"))(100))
 fviz_contrib(res_pca, choice = "var", axes = 1, top = 50) %>% theme_histo()
 (ctr <- get_ctr(res_pca))
 vars <- dimdesc(res_pca, 1:2)
@@ -74,8 +63,13 @@ theme_perso_2D(
         select.var = list(name = names(ctr[1:2]))
     )
 )
+```
 
 # Individuals
+```{r ind}
+res_pca$ind
+fviz_contrib(res_pca, choice = "ind", axes = 1, top = 50) %>% theme_histo()
+corrplot(t(res_pca$ind$contrib), is.corr = FALSE, col = colorRampPalette(c(colPers, "black"))(100))
 theme_perso_2D(
     fviz_pca_ind(
         res_pca,
@@ -85,61 +79,115 @@ theme_perso_2D(
     )
 )
 
+n <- length(levels(disease))
+# Color by disease
 theme_perso_2D(
     fviz_pca_ind(
         res_pca,
         geom.ind = "point",
         col.ind = disease,
-        palette = colors_var[seq(2) + 9],
+        palette = get_colors()[seq(n)],
         addEllipses = TRUE,
         legend.title = "Disease"
-    ) + scale_shape_manual(values = rep(19, 2))
+    ) + scale_shape_manual(values = rep(19, n))
 )
 
-var <- as.factor(clinic_intersect$gender)
-
+# Color by clusters
 Y <- res_pca$ind$coord[, 1]
+cls <- set_clusters(Y)
+cl <- cls$cl
+colors_k <- cls$colors_k
+k <- length(colors_k)
 
-dat <- data.frame(Y = Y - min(Y)) %>%
+theme_perso_2D(
+    fviz_pca_ind(
+        res_pca,
+        axes = c(1, 2),
+        geom.ind = "text",
+        col.ind = as.character(cl),
+        palette = c(colors_k, "red"),
+        addEllipses = TRUE,
+        legend.title = "Clusters"
+    ) + scale_shape_manual(values = rep(19, k))
+)
+```
+
+# Integrative
+```{r int}
+theme_perso_2D(
+    fviz_pca_biplot(
+        res_pca,
+        repel = TRUE,
+        col.var = "gray",
+        col.ind = as.character(cl),
+        gradient.cols = colPers,
+        # alpha.var = "cos2",
+        palette = c(colors_k, "red"),
+        legend.title = "Clusters",
+        # pointsize = "cos2",
+        mean.point = FALSE,
+        select.var = list(name = names(unlist(ctr[1:2])))
+    ) + scale_shape_manual(values = rep(19, k))
+)
+```
+
+# Confounding effects
+## Categorical effect
+```{r conf}
+i <- "batch"
+var <- clinic_intersect %>%
+    pull(i) %>%
+    as.factor()
+n <- length(levels(var))
+# dat <- data.frame(Y = Y - min(Y)) %>%
+Y <- res_pca$ind$coord[, 1]
+Y <- (Y)^(1 / 3)
+dat <- data.frame(Y = Y) %>%
     mutate(group = var)
-colnames(dat)[1] <- "Y"
-(res_aov <- anova_test(dat, Y ~ group))
 model <- lm(Y ~ group, data = dat)
 ggqqplot(residuals(model))
+shapiro_test(Y)
 group_by(dat, group) %>%
     shapiro_test(Y)
 ggqqplot(dat, "Y", facet.by = "group")
 levene_test(dat, Y ~ group)
 (res_aov <- anova_test(dat, Y ~ group))
-(pwc <- tukey_hsd(dat, Y ~ group))
 
-n <- length(levels(var))
 theme_perso_2D(
     fviz_pca_ind(
         res_pca,
-        geom.ind = "point",
+        geom.ind = "text",
         col.ind = var,
-        palette = colors_var[10:(10 + n)],
+        palette = get_colors()[10:(10 + n)],
         addEllipses = TRUE,
-        legend.title = "Gender",
+        legend.title = i,
         pointsize = 3
     )
 ) + scale_shape_manual(values = rep(19, n)) +
     labs(subtitle = get_test_label(res_aov, detailed = TRUE)) +
     theme(plot.subtitle = element_text(hjust = 0.5))
 
+(pwc <- tukey_hsd(dat, Y ~ group))
 pwc <- pwc %>% add_xy_position(x = "group")
-ggboxplot(dat, x = "group", y = "Y", color = "group", palette = colors_var[10:12]) +
+ggboxplot(dat, x = "group", y = "Y", color = "group", palette = get_colors()[10:12]) +
     stat_pvalue_manual(pwc, hide.ns = TRUE) +
     labs(
         subtitle = get_test_label(res_aov, detailed = TRUE),
         caption = get_pwc_label(pwc)
     )
+```
 
+## Numerical effect
+```{r num_conf}
+# age_at_inclusion_time BMI
+i <- "BMI"
+var <- clinic_intersect %>% pull(i)
 dat <- data.frame(Y = (Y)) %>%
-    mutate(var = log1p(clinic_intersect$BMI))
-colnames(dat)[1] <- "Y"
-(model <- lm(Y ~ var, data = dat))
+    mutate(var = (var + 1)^(1 / 2))
+shapiro_test(dat$var)
+cor(dat[, 1], dat[, 2], method = "spearman")
+ggscatterstats(dat, Y, var, type = "nonparametric")
+model <- lm(Y ~ var, data = dat)
 # dat <- data.frame(Y = Y ^(1/3)) %>%
 #     mutate(var = (clinic_intersect$gender))
 # (model  <- glm(var ~ Y, data = dat, family = binomial(link = logit)))
@@ -166,56 +214,17 @@ ggscatter(dat, x = "Y", y = "var", add = "reg.line") +
     stat_regline_equation(aes(label = paste(..eq.label.., ..rr.label.., sep = "~~~~")))
 shapiro.test(residuals(model))
 
-cls <- set_clusters(Y)
-cl <- cls$cl
-colors_k <- cls$colors_k
-k <- length(colors_k)
-
 theme_perso_2D(
     fviz_pca_ind(
         res_pca,
         geom.ind = "point",
-        col.ind = clinic_intersect$physician_global_assessment,
+        col.ind = var,
         addEllipses = FALSE,
         gradient.cols = colors_ind,
-        legend.title = "Global assessment",
+        legend.title = i,
         pointsize = 3
     )
 ) +
     labs(subtitle = sub_title) +
     theme(plot.subtitle = element_text(hjust = 0.5))
-
-theme_perso_2D(
-    fviz_pca_ind(
-        res_pca,
-        axes = c(1, 2),
-        geom.ind = "text",
-        col.ind = as.character(cl),
-        palette = c(colors_k, "red"),
-        addEllipses = TRUE,
-        legend.title = "Clusters"
-    ) + scale_shape_manual(values = rep(19, k))
-)
-
-res_pca$ind
-# fviz_contrib(res_pca, choice = "ind", axes = 1, top = 50)
-corrplot(t(res_pca$ind$contrib), is.corr = FALSE, col = colorRampPalette(c(colPers, "black"))(100))
-corrplot(t(res_pca$var$contrib), is.corr = FALSE, col = colorRampPalette(c(colPers, "black"))(100))
-
-# Integrative
-theme_perso_2D(
-    fviz_pca_biplot(
-        res_pca,
-        repel = TRUE,
-        col.var = "gray",
-        col.ind = as.character(cl),
-        gradient.cols = colPers,
-        # alpha.var = "cos2",
-        palette = c(colors_k, "red"),
-        legend.title = "Clusters",
-        # pointsize = "cos2",
-        mean.point = FALSE,
-        select.var = list(name = names(unlist(ctr[1:2])))
-    ) + scale_shape_manual(values = rep(19, k))
-)
 ```
