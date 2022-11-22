@@ -2,28 +2,8 @@
 set_analysis <- function(block_name = "blocks_clinic", to_remove = NULL) {
     options(ggrepel.max.overlaps = Inf)
     path <- file.path(golem::get_golem_wd(), "data")
-
-    RGCCA:::load_libraries(
-        c(
-            "ade4",
-            "cluster",
-            "corrplot",
-            "dplyr",
-            "factoextra",
-            "FactoMineR",
-            "ggpubr",
-            "ggstatsplot",
-            "heatmaply",
-            "kohonen",
-            "NbClust",
-            "pheatmap",
-            "pvclust",
-            "RColorBrewer",
-            "RGCCA",
-            "rstatix",
-            "tidyverse"
-        )
-    )
+    libs <- desc::desc_get_deps()$package
+    load_libraries(libs[libs != "R"])
 
     load(file.path(path, paste0(block_name, ".rda")))
     blocks <- get(block_name)

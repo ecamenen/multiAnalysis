@@ -48,3 +48,11 @@
 #' @rdname blocks
 #' @usage data(som_model)
 "som_model"
+
+#' @rdname blocks
+#' @usage data(clinic_tot_conf)
+"clinic_tot_conf"
+
+#' @rdname blocks
+#' @usage data(clinic_tot_raw)
+"clinic_tot_raw"
