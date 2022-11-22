@@ -24,7 +24,7 @@ hc_metric <- "pearson"
 blocks <- blocks[[1]]
 n_run <- 100000
 MAX_CLUSTERS <- 6
-
+hc_method <- 3
 k <- 4
 colors_k <- brewer.pal(n = 9, name = "Set1")[seq(k) + 2]
 cols <- function(a = 1) {
@@ -73,18 +73,42 @@ som_inds %>%
 
 # Clustering
 ```{r}
+# Data preparation
 som_codes <- som_model$codes[[1]]
-som_codes_scaled <- scale(som_codes)
-res_dist <- get_dist(som_codes_scaled, stand = FALSE, method = hc_metric)
+rownames(som_codes) <- rownames(som_codes) %>% gsub("V", "N", .)
+
+# Clustering for the samples
+res_dist <- get_dist(som_codes, stand = FALSE, method = hc_metric)
 n <- nrow(som_codes) - 2
 if (MAX_CLUSTERS > n) {
-      MAX_CLUSTERS <- n
-  }
-classif <- getClassif(2, MAX_CLUSTERS, som_codes_scaled, res_dist)
+    MAX_CLUSTERS <- n
+}
+classif <- getClassif(hc_method, MAX_CLUSTERS, som_codes, res_dist)
 cls <- getClusterPerPart(MAX_CLUSTERS, classif)
-get_summary(som_codes_scaled, res_dist, cls, MAX_CLUSTERS, k = k)
+cl_summary <- get_summary(res_dist, cls, MAX_CLUSTERS, k = 2)
+cl_summary
+k <- which.max(cl_summary$`Silhouette index`) + 1
+lapply(
+    2:MAX_CLUSTERS,
+    function(i) plot_silhouette0(res_dist, cls, i)
+) %>%
+    plot_grid(
+        plotlist = .,
+        align = "vh",
+        labels = paste("k =", 2:MAX_CLUSTERS),
+        hjust = 0,
+        nrow = 2,
+        ncol = 3
+    )
+
+# Variable contribution
+100 * getCtrVar(k, cls[[k - 1]], som_codes)
+ctr <- getDiscriminantVariables(k, cls[[k - 1]], som_codes, ncol(som_codes))
+plotHistogram(df = ctr)
+
+
 # res0 <- pvclust(
-#   t(som_codes_scaled),
+#   t(som_codes),
 #   method.hclust = hc_method,
 #   method.dist = "euclidian",
 #   use.cor = "pairwise.complete.obs",
