@@ -14,12 +14,15 @@ BugReports: https://github.com/ecamenen/multiAnalysis/issues
 Depends:
     R (>= 2.10)
 Imports:
+    ade4,
     cluster,
     corrplot,
+    cowplot,
     dendextend,
     dplyr,
     factoextra,
     FactoMineR,
+    ggforce,
     ggplot2,
     ggpubr,
     ggrepel,
@@ -28,6 +31,7 @@ Imports:
     graphics,
     grDevices,
     heatmaply,
+    kohonen,
     magrittr,
     mixOmics,
     modelr,
@@ -38,8 +42,10 @@ Imports:
     RColorBrewer,
     RGCCA,
     rstatix,
+    rlist,
     stats,
     stringr,
+    tidylog,
     tidyverse,
     utils,
     visNetwork

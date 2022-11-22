@@ -1,6 +1,6 @@
-#' @import corrplot cluster dendextend dplyr factoextra FactoMineR ggplot2
-#' @import ggrepel ggstatsplot golem heatmaply NbClust pheatmap pvclust
-#' @import RColorBrewer RGCCA stringr tidyverse visNetwork
+#' @import ade4 cluster corrplot cowplot dendextend dplyr factoextra FactoMineR ggforce ggplot2
+#' @import ggrepel ggstatsplot golem heatmaply kohonen NbClust pheatmap pvclust rlist
+#' @import RColorBrewer RGCCA stringr tidylog tidyverse visNetwork
 #' @importFrom graphics par text
 #' @importFrom stats as.dendrogram
 #' @importFrom magrittr %>%

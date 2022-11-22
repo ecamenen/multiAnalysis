@@ -12,7 +12,7 @@ plotHistogram(
   n = 100,
   title = "",
   color = "black",
-  color_gradient = Reds(2)
+  color_gradient = c("#FFF5F0", "#99000D")
 )
 }
 \arguments{
