@@ -162,6 +162,45 @@ lapply(
 
 ```
 
+# Heatmap
+```{r}
+# Clustering for the variables
+if (hc_method > 2) {
+    col_dist <- t(som_codes) %>%
+        get_dist(stand = FALSE, method = hc_metric)
+    col_classif <- hclust(col_dist, method = getClassifType(hc_method))
+    col_cls <- getClusterPerPart(MAX_CLUSTERS, col_classif)
+    col_summary <- get_summary(col_dist, col_cls, MAX_CLUSTERS, k = 2)
+    col_summary
+    k_col <- which.max(col_summary$`Silhouette index`) + 1
+    lapply(
+        2:MAX_CLUSTERS,
+        function(i) plot_silhouette0(col_dist, col_cls, i)
+    ) %>%
+        plot_grid(
+            plotlist = .,
+            align = "vh",
+            labels = paste("k =", 2:MAX_CLUSTERS),
+            hjust = 0,
+            nrow = 2,
+            ncol = 3
+        )
+
+    pheatmap(
+        scale0(som_codes, "minmax"),
+        color =  colorRampPalette(colors_ind)(100),
+        angle_col = 315,
+        na_col = "black",
+        border_color = NA,
+        # annotation_col = my_sample_col,
+        cluster_rows = classif,
+        cluster_cols = col_classif,
+        cutree_rows = k,
+        cutree_cols = k_col
+    )
+}
+```
+
 # Code plots
 ```{r}
 par(mfrow = c(2, 2))
