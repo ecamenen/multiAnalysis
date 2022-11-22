@@ -41,10 +41,7 @@ col_grp <- function(x = som_clusters, a = 1) {
 
 # Data preparation
 ```{r}
-# res_scaled <- res_scaled_na
-# res_scaled[is.na(res_scaled)] <- 0
-
-res_scaled_na <- heatmaply::normalize(blocks)
+res_scaled_na <- scale0(blocks, "zscore")
 res_scaled <- res_scaled_na
 res_scaled[is.na(res_scaled)] <- 0
 ```
