@@ -53,11 +53,21 @@ color_dendrogram <- function(
 }
 
 #' @export
-plot_silhouette <- function(x, colors = c("indianred1", "darkseagreen", "steelblue")) {
+plot_silhouette <- function(x, colors = get_colors(), cex = 1) {
     p <- fviz_silhouette(x, palette = colors, ylim = c(min(x[, 3]), (max(x[, 3]) + 0.1))) +
         theme_classic() +
-        theme(axis.text.x = element_text(angle = 90))
+        theme(
+            axis.title = element_text(size = cex * 20, face = "italic"),
+            axis.ticks = element_blank(),
+            axis.text.x = element_text(angle = 270, hjust = 0, vjust = 0.5, size = cex * 12, color = "gray"),
+            axis.text.y = element_text(size = cex * 12, color = "gray"),
+            plot.title = element_text(size = cex * 25, face = "bold", hjust = 0.5),
+            legend.title = element_text(size = cex * 12, face = "italic")
+        )
     p$layers[[2]]$aes_params$colour <- "gray"
+    p$labels$title <- gsub(".+\n (.+)", "\\1", p$labels$title)
+    p$labels$y <- gsub(" Si", "", p$labels$y)
+    p$labels$colour <- str_to_title(p$labels$colour) -> p$labels$fill
     p
 }
 
@@ -119,9 +129,19 @@ plot_mean_test <- function(x, i, stats, color = c("red", "blue")) {
 }
 
 #' @export
-get_summary <- function(res_scaled, res_dist, cls, MAX_CLUSTERS, row_dend0 = NULL, k = 2) {
-    sils <- getSilhouettePerPart(res_scaled, cls, res_dist)
-    mean_sil <- getMeanSilhouettePerPart(sils)
+plot_silhouette0 <- function(res_dist, cls, k,  cex = 1) {
+    sils <- getSilhouettePerPart(cls, res_dist)
+    sil_k <- sils[[k - 1]]
+    colors_k <- get_colors()[seq(k) + 2]
+    # plotSilhouette(sil_k)
+    # abline(v = mean(sil_k[, 3]), col = "red", lwd = 2, lty = 1)
+    plot_silhouette(sil_k, colors_k, cex = cex)
+}
+
+#' @export
+get_summary <- function(res_dist, cls, MAX_CLUSTERS, row_dend0 = NULL, k = 2) {
+    mean_sil <- getSilhouettePerPart(cls, res_dist) %>%
+        getMeanSilhouettePerPart()
     # plotSilhouettePerPart(mean_sil)
     between <- getRelativeBetweenPerPart(MAX_CLUSTERS, res_dist, cls)
     between_diff <- getBetweenDifferences(between)
@@ -143,10 +163,20 @@ get_summary <- function(res_scaled, res_dist, cls, MAX_CLUSTERS, row_dend0 = NUL
             )
         ) %>% tibble()
     }
-    print(summary)
-    sil_k <- sils[[k - 1]]
-    colors_k <- brewer.pal(n = 9, name = "Set1")[seq(k) + 2]
-    # plotSilhouette(sil_k)
-    # abline(v = mean(sil_k[, 3]), col = "red", lwd = 2, lty = 1)
-    plot_silhouette(sil_k, colors_k)
+    return(summary)
+}
+
+#' @export
+scale0 <- function(x, method = "zscore") {
+    stopifnot(method %in% c("minmax", "zscore"))
+    if (method == "minmax") {
+          heatmaply::normalize(x)
+      } else {
+          scale(x)
+      }
+}
+
+#' @export
+print_stats <- function(x, dec = 1) {
+    paste(mean(x, na.rm = TRUE) %>% round(dec), "\u00b1", sd(x, na.rm = TRUE) %>% round(dec))
 }
