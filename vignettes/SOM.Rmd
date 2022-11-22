@@ -93,19 +93,23 @@ names(ind_clusters) <- rownames(res_scaled_na)
 # Code plots
 ```{r}
 par(mfrow = c(2, 2))
-plot(som_model, type = "counts")
-plot(som_model, type = "dist.neighbours")
-add.cluster.boundaries(som_model, som_clusters)
-plot(som_model, type = "quality")
+plot(som_model, type = "counts", shape = "straight", border = NA)
+dist_neighbours <- plot(som_model, type = "dist.neighbours", shape = "straight", border = NA)
+print_stats(dist_neighbours)
+add.cluster.boundaries(som_model, som_clusters, lwd = 5, col = "white")
+quality <- plot(som_model, type = "quality", shape = "straight", border = NA)
+print_stats(quality)
 plot(
     som_model,
+    cex = 0.7,
     type = "mapping",
-    pch = som_clusters,
-    labels = rownames(res_scaled_na),
+    labels = names(ind_clusters),
     col = col_grp(x = ind_clusters),
-    bg = col_grp(a = 0.25)
+    bg = col_grp(a = 0.25),
+    shape = "straight",
+    border = NA
 )
-add.cluster.boundaries(som_model, som_clusters)
+add.cluster.boundaries(som_model, som_clusters, lwd = 5, col = "white")
 par(mfrow = c(1, 1))
 
 # plot(som_model, type = "codes", palette.name = rainbow, codeRendering = "segments")
