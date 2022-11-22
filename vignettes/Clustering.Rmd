@@ -14,39 +14,38 @@ knitr::opts_chunk$set(
 )
 ```
 
+# Setup
 ```{r setup}
 library(multiAnalysis)
-```
-```{r}
-# Environment
+set.seed(123)
 set_analysis(block_name = "clinic_still_processed", to_remove = c("1007", "1014"))
 hc_method <- "ward.D2"
 hc_metric <- "pearson"
 hc_index <- "silhouette"
 k <- 2
 n_boot <- 1000
-
 MAX_CLUSTERS <- 6
-colors_k <- brewer.pal(n = 9, name = "Set1")[seq(k) + 2]
+colors_k <- get_colors()[seq(k) + 2]
+```
 
-names_levels <- str_replace(levels(disease), " \\(.+\\)", "")
-# names_levels <- c("Still", "Control", "SOJIA")
-row_annotation <- data.frame(
-    Disease = factor(disease, labels = names_levels)
-)
-blocks <- blocks[[1]] %>% select(-c("eye_manifestations", "cardiac_manifestations")) # %>% select(-c("gender", "BMI", "age_at_inclusion_time", "batch"))
 # Data preparation
-res_scaled_na0 <- scale(blocks)
-res_scaled0 <- res_scaled_na0
-res_scaled0[is.na(res_scaled0)] <- 0
+```{r}
+# Levels
+row_annotation <- data.frame(Disease = disease)
+names_levels <- levels(disease)
+# names_levels <- c("Still", "Control", "SOJIA")
+blocks <- blocks[[1]] %>% select(-c("eye_manifestations", "cardiac_manifestations")) # %>% select(-c("gender", "BMI", "age_at_inclusion_time", "batch"))
 
-res_scaled_na <- heatmaply::normalize(blocks)
+
+# Scaling
+res_scaled_na <- scale0(blocks)
 res_scaled <- res_scaled_na
 res_scaled[is.na(res_scaled)] <- 0
-
-get_clust_tendency(res_scaled, n = nrow(res_scaled) - 1)
+```
 
 # Optimal k
+```{r, eval = FALSE}
+get_clust_tendency(res_scaled, n = nrow(res_scaled) - 1)
 
 index <- c(
     "kl", "ch", "hartigan", "cindex", "db", "silhouette", "duda", "pseudot2",
@@ -70,28 +69,31 @@ res.nbclust <- NbClust(
 #     get_clusters,
 #     method = hc_index
 # )
-(gaps <- clusGap(
-    res_scaled,
-    FUN = get_clusters,
-    K.max = 6,
-    B = n_boot
-))
-fviz_gap_stat(gaps, maxSE = list(method = "Tibs2001SEmax", SE.factor = 1))
+# (gaps <- clusGap(
+#     res_scaled,
+#     FUN = get_clusters,
+#     K.max = 6,
+#     B = n_boot
+# ))
+# fviz_gap_stat(gaps, maxSE = list(method = "Tibs2001SEmax", SE.factor = 1))
+```
 
 # Distance
+```{r}
 res_dist <- get_dist(res_scaled, stand = FALSE, method = hc_metric)
 
-fviz_dist(
-    res_dist,
-    gradient = list(
-        low = colors_ind[1],
-        mid = colors_ind[2],
-        high = colors_ind[3]
-    )
-)
+# fviz_dist(
+#     res_dist,
+#     gradient = list(
+#         low = colors_ind[1],
+#         mid = colors_ind[2],
+#         high = colors_ind[3]
+#     )
+# )
+```
 
 # Clustering
-
+```{r}
 # res_clus <- HCPC(pca_res, nb.clust = k, graph = FALSE)
 # res_clus$data.clust$clust
 # res_clus$desc.var$test.chi2
@@ -110,11 +112,6 @@ res_clus <- eclust(
 )
 table(res_clus$cluster, t(row_annotation))
 
-res_clus0 <- res_scaled0 %>%
-    get_dist(stand = FALSE, method = hc_metric) %>%
-    hclust(method = hc_method)
-table(cutree(res_clus0, k = k), t(row_annotation))
-
 res_clus_var <- res_scaled %>%
     t() %>%
     eclust(
@@ -124,13 +121,15 @@ res_clus_var <- res_scaled %>%
         hc_metric = hc_metric,
         k = k
     )
+```
 
 # Visualisation
+```{r}
 rownames(row_annotation) <- rownames(res_scaled)
-n <- seq(length(levels(disease)))
-row_col <- colors_var[n]
+n <- seq(length(names_levels))
+row_col <- get_colors()[n]
 names(row_col) <- names_levels
-row_col0 <- as.character(factor(disease, labels = colors_var[seq(n)]))
+row_col0 <- as.character(factor(disease, labels = get_colors()[seq(n)]))
 
 fviz_dend(
     res_clus,
@@ -170,8 +169,8 @@ fviz_cluster(
 ) + theme_classic()
 
 # dl <- dendlist(
-#     color_dendrogram(d1, 2, colors_var[c(3, 5) + 9]),
-#     color_dendrogram(d2, 2, colors_var[c(3, 5) + 9])
+#     color_dendrogram(d1, 2, get_colors()[c(3, 5) + 9]),
+#     color_dendrogram(d2, 2, get_colors()[c(3, 5) + 9])
 # )
 # tanglegram(
 #     dl,
@@ -182,8 +181,10 @@ fviz_cluster(
 #     # k_labels = 2,
 #     lwd = 2
 # )
+```
 
 # Heatmap
+```{r}
 row_dend <- color_dendrogram(res_clus, k = k, colors = colors_k) %>% sort()
 col_dend <- color_dendrogram(res_clus_var, k = 2, colors = c("#f03088", "#d9d52c")) %>% sort()
 
@@ -202,11 +203,11 @@ heatmaply(
     # col_side_colors = group_code,
     row_side_colors = row_annotation,
     row_side_palette = row_col,
-    RowSideColors = factor(disease, labels = names_levels),
+    RowSideColors = disease,
     plot_method = "plotly",
     colorbar_xpos = 1.025,
-    fontsize_row = 20,
-    fontsize_col = 20,
+    fontsize_row = 15,
+    fontsize_col = 15,
     # na.rm = FALSE,
     key.title = "Disease"
     # side_color_layers,
@@ -249,12 +250,14 @@ heatmap(
 
 # clinic_intersect %>% filter(str_detect(disease, "control")) %>%
 #     arrange(immun_aid_identifier)
+```
 
 # Quality
-plotGapPerPart(gaps, MAX_CLUSTERS)
+```{r}
+# plotGapPerPart(gaps, MAX_CLUSTERS)
 plotFusionLevels(MAX_CLUSTERS, row_dend0)
 cls <- getClusterPerPart(MAX_CLUSTERS, row_dend0)
-get_summary(res_scaled, res_dist, cls, MAX_CLUSTERS, row_dend0, k = k)
+get_summary(res_dist, cls, MAX_CLUSTERS, row_dend0, k = k)
 
 # Variable contribution
 100 * getCtrVar(k, cls[[k - 1]], res_scaled)
@@ -320,14 +323,16 @@ plotHistogram(df = ctr) +
 
 # Outputs
 # write.csv2(as.data.frame(cl), "clusters.temp.tsv")
+```
 
 # NHC
+```{r}
 classif <- getClassif(2, MAX_CLUSTERS, res_scaled, res_dist)
 # res_dist0 <- get_dist(res_scaled, stand = FALSE, method = "euclidian")
 # classif <- lapply(2:MAX_CLUSTERS, function(i) pam(res_dist0, i, diss = TRUE))
 classif[[k]]$data <- res_scaled
 cls <- getClusterPerPart(MAX_CLUSTERS, classif)
-get_summary(res_scaled, res_dist, cls, MAX_CLUSTERS, k = k)
+get_summary(res_dist, cls, MAX_CLUSTERS, k = k)
 
 fviz_cluster(
     classif[[k]],
