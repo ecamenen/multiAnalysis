@@ -196,26 +196,22 @@ isSymmetric <- function(d) {
 # df: data
 # d: distance matrix
 # Ouput: Hierarchical classification
-getCAH <- function(t, df, d) {
+getCAH <- function(t, d) {
     if (t > 2) {
         if (t == 8 | t == 9) {
-              checkEuclidean(d)
-          }
-
-        # cah: classification hierarchic ascending
-        cah <- hclust(d, method = getClassifType(t))
-        # automaticly ordering by clusters
-        return(reorder.hclust(cah, d))
+            checkEuclidean(d)
+        }
+        hclust(d, method = getClassifType(t))
     }
 }
 
 # Selects best algo based on cophenetic calculation
 # df: data
 # d: distance matrix
-selectBestCAH <- function(df, d, v = F) {
+selectBestCAH <- function(d, v = F) {
     temp <- 0
     for (i in 3:9) {
-        cah <- getCAH(df, i)
+        cah <- getCAH(d, i)
         res <- cor(d, cophenetic(cah))
         if (isTRUE(v)) cat(paste(getClassifType(i), ":", round(res, 3), "\n"))
         if (res > temp) {
@@ -229,6 +225,7 @@ selectBestCAH <- function(df, d, v = F) {
 
 # Inputs:
 # t: number of type of classification
+#' @export
 getClassifType <- function(t) {
     methods <- c("kmedoids", "kmeans", "ward.D2", "complete", "single", "average", "mcquitty", "median", "centroid")
     methods[t]
@@ -245,24 +242,30 @@ getCoefAggl <- function(c) {
 # d: distance for pam
 # k: number of clusterting
 # Ouput: Non-hierarchical classification
-getCNH <- function(t, df, d, k) {
+getCNH <- function(t, df, d, k, centers = NULL) {
     if (t == 1) {
-          return(pam(d, k, diss = T))
-      } else if (t == 2) {
+        if (!is.null(centers)) {
+            return(pam(d, k, diss = T, nstart = 100, medoids = centers))
+        }
+        return(pam(d, k, diss = T, nstart = 100))
+    } else if (t == 2) {
         # checkEuclidean(d)
+        if (!is.null(centers)) {
+            k <- centers
+        }
         return(kmeans(df, centers = k, nstart = 100))
     }
 }
 
 #' @export
-getClassif <- function(t, n, df, d) {
+getClassif <- function(t, n, df, d, centers = NULL) {
     if (t > 2) {
-        getCAH(t, df, d)
+        getCAH(t, d)
     } else {
         list_cnh <- list("method" = getClassifType(t))
         for (k in 2:(n + 1)) {
-              list_cnh[[k]] <- getCNH(t, df, d, k)
-          }
+            list_cnh[[k]] <- getCNH(t, df, d, k, centers = centers[[k - 1]])
+        }
         return(list_cnh)
     }
 }
@@ -444,16 +447,16 @@ plotElbow <- function(x) {
 ################################
 
 # Ouput: an ordered silhouette object
-getSilhouette <- function(df, cl_k, d) {
+getSilhouette <- function(cl_k, d) {
     s <- sortSilhouette(silhouette(cl_k, d))
-    rownames(s) <- row.names(df)[attr(s, "iOrd")]
+    rownames(s) <- labels(d)[attr(s, "iOrd")]
     return(s)
 }
 
-getSilhouettePerPart <- function(df, cl, d) {
+getSilhouettePerPart <- function(cl, d) {
     list_sil <- list()
     for (k in seq(length(cl))) {
-        list_sil[[k]] <- getSilhouette(df, cl[[k]], d)
+        list_sil[[k]] <- getSilhouette(cl[[k]], d)
     }
     return(list_sil)
 }
@@ -788,16 +791,17 @@ plotInertiaPca <- function(pca, d, nf = 4) {
 #            Variables contribution
 #########################################
 
+#' @export
 getDistPerVariable0 <- function(d, cl) {
-    nb_cl <- length(levels(as.factor(cl)))
+    nb_cl <- max(cl)
     i_rows <- sapply(seq(nb_cl), function(i) {
-          which(cl == i)
-      })
+        which(cl == i)
+    })
     sapply(seq(nb_cl), function(i) {
-          apply(d[i_rows[[i]], ], 2, function(j) {
-                mean(j, na.rm = TRUE)
-            })
-      })
+        apply(d[i_rows[[i]], , drop = FALSE], 2, function(j) {
+            mean(j, na.rm = TRUE)
+        })
+    }) %>% t()
 }
 # For a given partition (cl) and each variables (dataset columns)
 # pondered distance between the centroid of each clusters and the global centroid of the cloud
