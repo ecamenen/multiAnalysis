@@ -54,13 +54,24 @@ res_scaled[is.na(res_scaled)] <- 0
 som_grid <- somgrid(
     xdim = 4,
     ydim = 4,
-    topo = "hexagonal"
+    topo = "hexagonal",
+    toroidal = TRUE
 )
-path <- file.path(golem::get_golem_wd())
-load(file.path(path, "data", "som_model.RData"))
 # som_model <- som(as.matrix(res_scaled), grid = som_grid, rlen = n_run)
+
+path <- file.path(golem::get_golem_wd())
+file_path <- file.path(path, "data", "som_model_all.RData")
+# save(som_model, file = file_path)
+load(file_path)
+
 plot(som_model, type = "changes")
 
+som_inds <- som_model$unit.classif %>% set_names(rownames(blocks))
+print(sapply(seq(max(som_inds)), function(x) names(som_inds[som_inds == x])))
+som_inds %>%
+    as.factor() %>%
+    fct_infreq() %>%
+    fct_count()
 ```
 
 # Clustering
