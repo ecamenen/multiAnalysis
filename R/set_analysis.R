@@ -44,11 +44,16 @@ set_analysis <- function(block_name = "blocks_clinic", to_remove = NULL) {
         )
     ) %>% arrange(immun_aid_identifier)
     disease <<- clinic_intersect$disease %>%
-        factor(., levels = unique(.))
-
-    colors_var <<- c(
-        brewer.pal(n = 9, name = "Pastel1"),
-        brewer.pal(n = 9, name = "Set1")
-    )
+        fct_drop() %>%
+        fct_infreq() %>%
+        fct_relabel(~ str_replace(.x, " \\(.+\\)", ""))
     colors_ind <<- c("blue", "white", "#cd5b45")
+}
+
+#' @export
+get_colors <- function() {
+    c(
+        brewer.pal(n = 9, name = "Set1"),
+        brewer.pal(n = 9, name = "Pastel1")
+    )
 }

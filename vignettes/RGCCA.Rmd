@@ -47,13 +47,14 @@ plot_var_2D(
 
 plot_ind0 <- function(
     x,
-    colors = colors_var,
+    colors = get_colors(),
     no_overlap = TRUE,
     text = FALSE,
     i_block = n
 ) {
-    if (text)
+    if (text) {
         no_overlap <- FALSE
+    }
     plot_ind(
         res,
         i_block = i_block,

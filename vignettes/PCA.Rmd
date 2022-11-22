@@ -20,7 +20,7 @@ library(multiAnalysis)
 set_analysis(block_name = "clinic_tot_raw", to_remove = "26102")
 colPers <- rev(colors_ind[3:2])
 vars2 <- c("immun_aid_identifier", "weight", "height") # , "fatigue")
-blocks <- blocks[[1]] %>% select(
+blocks <- blocks %>% select(
     -c(
         vars2,
         # ends_with("_global_assessment"),

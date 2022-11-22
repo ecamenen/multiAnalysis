@@ -7,7 +7,7 @@ setGraphicBasic <- function() {
 plot_dendrogram <- function(
     x,
     k,
-    color = c("indianred1", "darkseagreen", "steelblue"),
+    color = get_colors(),
     color_bar = color
 ) {
     x0 <- color_dendrogram(x, k = k, colors = color) %>%
@@ -44,7 +44,7 @@ plot_dendrogram <- function(
 color_dendrogram <- function(
     x,
     k,
-    colors = c("indianred1", "darkseagreen", "steelblue")
+    colors = get_colors()
 ) {
     as.dendrogram(x) %>%
         set("branches_k_color", value = colors[seq(k)], k = k) %>%

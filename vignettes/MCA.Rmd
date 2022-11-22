@@ -87,7 +87,7 @@ fviz_mca_ind(
     res_mca,
     label = "none",
     habillage = "disease",
-    palette = colors_var[9:10],
+    palette = get_colors()[9:10],
     addEllipses = TRUE, ellipse.type = "confidence",
     ggtheme = theme_minimal()
 )
@@ -187,7 +187,7 @@ ggbetweenstats(
         axis.ticks.x = element_blank(),
         axis.line.x = element_line(color = "white")
     ) +
-    scale_color_manual(values = brewer.pal(n = 9, name = "Set1")[seq(2)]) +
+    scale_color_manual(values = get_colors()[seq(2)]) +
     geom_hline(yintercept = 0, lwd = 0.25)
 
 temp0 <- data.frame(cls = as.character(cl), blocks) %>%

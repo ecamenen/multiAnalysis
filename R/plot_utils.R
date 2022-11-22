@@ -60,7 +60,7 @@ theme_perso_2D <- function(p) {
 #' p <- ggplot(df, aes(order, x, fill = color))
 #' plotHistogram(p, df, "Histogram", as.character(df$color))
 #' @export plotHistogram
-plotHistogram <- function(p = NULL, df = NULL, hjust = 0, vjust = 0.5, n = 100, title = "", color = "black", color_gradient = Reds(2)) {
+plotHistogram <- function(p = NULL, df = NULL, hjust = 0, vjust = 0.5, n = 100, title = "", color = "black", color_gradient = c("#FFF5F0", "#99000D")) {
     if (is.null(p)) {
         df0 <- as.data.frame(df)
         colnames(df0)[1] <- "val"
@@ -121,7 +121,7 @@ set_clusters <- function(Y) {
     } else {
         cl <- left_join(data.frame(X = as.double(rownames(blocks))), cls)[, 2]
     }
-    colors_k <- brewer.pal(n = 9, name = "Set1")[seq(k) + 2]
+    colors_k <- get_colors()[seq(k) + 2]
     if (k > 2) {
         colors_k <- c(colors_k[seq(2)], "red", colors_k[3])
     }

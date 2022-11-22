@@ -18,13 +18,14 @@ knitr::opts_chunk$set(
 library(multiAnalysis)
 ```
 ```{r}
-set_analysis(block_name = "clinic_still_processed")
-blocks <- blocks[[1]] %>% select(-c("eye_manifestations"))
-hc_metric <- "pearson"
+set_analysis(block_name = "clinic_tot_raw")
+hc_method <- "ward.D2"
+blocks <- blocks %>% select(-c("eye_manifestations"))
+hc_metric <- "spearman"
 ncomp <- 2
 
 # Data preparation
-res_scaled_na <- scale(blocks)
+res_scaled_na <- scale0(blocks)
 res_scaled <- res_scaled_na
 res_scaled[is.na(res_scaled)] <- 0
 
@@ -65,7 +66,7 @@ names(res_rgcca$AVE$AVE_X[[1]]) <- name_comp
 res_rgcca$a[[1]] <- ctr
 
 plot_var_2D(res_rgcca, i_block = 1, cex_lab = 15, resp = ctr[, 1], n_mark = 50, remove_var = FALSE)
-plot_ind(res_rgcca, i_block = 1, resp = disease, cex_lab = 15, colors = colors_var[seq(2) + 9])
+plot_ind(res_rgcca, i_block = 1, resp = disease, cex_lab = 15, colors = get_colors()[seq(2) + 9])
 path <- file.path(golem::get_golem_wd())
 
 cls <- set_clusters(mds$points[, 1])
@@ -99,6 +100,7 @@ RGCCA:::plot2D(
     2,
     1,
     cex_lab = 13,
+    no_overlap = TRUE,
     p = p
 ) +
     geom_path(
