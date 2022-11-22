@@ -119,7 +119,47 @@ plotHistogram(df = ctr)
 som_clusters <- cls[[k - 1]]
 # som_clusters <- read.csv2(file.path(path, "clusters0.temp.tsv"))$cl0
 ind_clusters <- som_clusters[som_inds]
-names(ind_clusters) <- rownames(res_scaled_na)
+ind_clusters %>%
+    as.factor() %>%
+    fct_infreq() %>%
+    fct_count()
+
+# Disease per groups
+names(ind_clusters) <- disease
+lapply(seq(k), function(i) {
+    ind_clusters[ind_clusters == i] %>%
+        names() %>%
+        fct_infreq() %>%
+        fct_count() %>%
+        filter(n > 2) %>%
+        data.frame(., i) %>%
+        # set_colnames(rep("", 2))
+        set_colnames(c("Disease", "N/cluster", "Cluster"))
+}) %>%
+    # set_names(paste("Cluster", seq(k)))
+    list.stack()
+
+# names(ind_clusters) <- rownames(res_scaled_na)
+lapply(seq(k), function(i) ind_clusters[ind_clusters == i])
+
+# Quality per samples
+ind_dist <- get_dist(res_scaled, stand = FALSE, method = hc_metric)
+ind_cls <- list.map(cls, f(i) ~ i[som_inds])
+ind_summary <- get_summary(ind_dist, ind_cls, MAX_CLUSTERS, k = 2)
+ind_summary
+lapply(
+    2:MAX_CLUSTERS,
+    function(i) plot_silhouette0(ind_dist, ind_cls, i)
+) %>%
+    plot_grid(
+        plotlist = .,
+        align = "vh",
+        labels = paste("k =", 2:MAX_CLUSTERS),
+        hjust = 0,
+        nrow = 2,
+        ncol = 3
+    )
+
 ```
 
 # Code plots
