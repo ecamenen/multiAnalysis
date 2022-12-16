@@ -14,15 +14,30 @@ knitr::opts_chunk$set(
 )
 ```
 
+# Setup
 ```{r setup}
 library(multiAnalysis)
-```
-```{r}
-set_analysis(block_name = "blocks")
+set_analysis(block_name = "rna_clinic_still2", type = "list", to_remove = c("1007", "1014", "9001"))
+load_all(path = file.path(golem::get_golem_wd(), "RGCCA"))
 n <- length(blocks)
-res <- rgcca(blocks, ncomp = 2, response = n) # tau = "optimal"
-plot_ave(res)
-RGCCA::plot_network2(res)
+ncomp <- 2
+```
+
+# Model
+```{r model}
+res <- rgcca(blocks, ncomp = ncomp, response = n, sparsity = c(1, 0.1)) # tau = "optimal"
+plot_ave(res, cex = 1.8, title = "")
+RGCCA::plot_network2(res, colors = c("gray", "gray"))
+
+sapply(ncol(res$a[[2]]), function(i) res$a[[2]][, i] != 0) %>%
+    which() %>%
+    length()
+
+# Y <- res$Y[[1]][, 1]
+```
+
+# Variable
+```{r var}
 plot_var_2D(
     res,
     cex_main = 30,
@@ -35,7 +50,10 @@ plot_var_2D(
     i_block = 1,
     cex_main = 30,
     cex_lab = 20,
-    no_overlap = TRUE
+    no_overlap = TRUE,
+    cex = 1.5,
+    n_mark = 10,
+    colors = get_colors()[1]
 )
 plot_var_2D(
     res,
@@ -44,32 +62,10 @@ plot_var_2D(
     cex_lab = 20,
     no_overlap = TRUE
 )
+```
 
-plot_ind0 <- function(
-    x,
-    colors = get_colors(),
-    no_overlap = TRUE,
-    text = FALSE,
-    i_block = n
-) {
-    if (text) {
-        no_overlap <- FALSE
-    }
-    plot_ind(
-        res,
-        i_block = i_block,
-        cex_main = 30,
-        cex_lab = 20,
-        no_overlap = no_overlap,
-        resp = as.data.frame(clinic_intersect[, x])[[1]],
-        response_name = str_to_title(x),
-        text = text,
-        colors = colors
-    )
-}
-
-plot_ind0("disease", text = FALSE)
-
+# Stats
+```{r stats}
 table_occ <- function(x, i, y) {
     sapply(
         y,
@@ -110,6 +106,39 @@ tab_gender <- table_occ(
         clinic_intersect$gender
     )))
 )
+```
+
+# Indivduals
+```{r ind}
+Reduce(cbind, res$Y) %>%
+    set_colnames(paste0(rep(c("Clinic", "RNA"), each = 2), ": Dim.", seq(2))) %>%
+    t() %>%
+    corrplot(is.corr = FALSE, col = colorRampPalette(colors_ind)(100))
+
+plot_ind0 <- function(
+    x,
+    colors = get_colors(),
+    no_overlap = TRUE,
+    text = FALSE,
+    i_block = n
+) {
+    if (text) {
+        no_overlap <- FALSE
+    }
+    plot_ind(
+        res,
+        i_block = i_block,
+        cex_main = 30,
+        cex_lab = 20,
+        no_overlap = no_overlap,
+        resp = as.data.frame(clinic_intersect[, x])[[1]],
+        response_name = str_to_title(x),
+        text = text,
+        colors = colors
+    )
+}
+
+plot_ind0("disease", i_block = 1, text = FALSE)
 
 clinic_intersect <- mutate(
     clinic_intersect,
@@ -133,8 +162,77 @@ colors <- c(
 )
 # toRGB(c(pal_ucscgb()(7)[-2], "black"), 0.5)
 
-plot_ind0("diseases", colors = colors)
+plot_ind0("diseases", colors = get_colors(), text = TRUE)
+```
 
+# Biplot
+```{r biplot}
+ctr <- RGCCA:::get_ctr2(
+    rgcca_res = res,
+    compx = 1,
+    compy = 2,
+    i_block = 1,
+    type = "loadings",
+    n_mark = 100,
+    remove_var = FALSE
+) %>% mutate(
+    top1 = ncol(blocks[[1]]) - (abs(X1) %>% row_number()) + 1,
+    top2 = ncol(blocks[[1]]) - (abs(X2) %>% row_number()) + 1,
+    name = colnames(blocks[[1]])
+)
+top_var <- bind_cols(
+    ctr %>% arrange(top1) %>% head(10) %>% pull(name),
+    ctr %>% arrange(top2) %>% head(10) %>% pull(name)
+)
+res_pca <- PCA(blocks[[1]], scale.unit = TRUE, ncp = 3, graph = FALSE)
+res_pca$ind$coord <- res$Y[[1]]
+res_pca$var$coord <- ctr[, seq(2)]
+res_pca$var$contrib <- abs(ctr[, seq(2)])
+res_pca$eig[seq(ncomp), 2] <- (res$AVE[[1]][[1]] * 100) %>% t() %>% t()
+# res_pca$var$contrib[ pull(top_var, 2), "X1"] <- res_pca$var$contrib[ pull(top_var, 2), "X2"]
+# theme_perso_2D(
+#     fviz_pca_var(
+#         res_pca,
+#         col.var = "contrib",
+#         repel = TRUE,
+#         gradient.cols = colPers,
+#         select.var = list(name = unlist(top_var))
+#     )
+# )
 
-# eval <- rgcca_cv_k(res, validation = "loo", detectCores())
+theme_perso_2D(
+    fviz_pca_biplot(
+        res_pca,
+        repel = TRUE,
+        col.var = "contrib",
+        gradient.cols = c("gray", get_colors()[1]),
+        # alpha.var = "contrib",
+        col.ind = "gray",
+        # palette = function (i) {c("red", "gray")},
+        # pointsize = "cos2",
+        mean.point = FALSE,
+        select.var = list(name = unlist(top_var))
+    ) +
+        labs(fill = "Contribution")
+)
+```
+
+# Bootstrap
+```{r boot}
+# eval <- rgcca_cv_k(res, validation = "loo")
+n_boot <- 1000
+# bb <- bootstrap(res, n_boot = n_boot)
+file_boot <- "bootstrap_still_rna_clinic.RData"
+# use_data(bb, file = file_boot, overwrite = TRUE)
+load(file.path(path, file_boot))
+top_var <- get_bootstrap(bb, type = "loadings")
+top_genes <- top_var %>%
+    data.frame() %>%
+    mutate(name = rownames(top_var)) %>%
+    tibble() %>%
+    arrange(desc(bootstrap_ratio)) %>%
+    filter(adjust.pval <= 0.05)
+# plot_bootstrap_2D(df_b = top_var, y = "occurences")
+plot_bootstrap_1D(df_b = top_var, x = "bootstrap_ratio", display_bar = FALSE, y = "bootstrap_ratio")
+plot_bootstrap_1D(df_b = top_var, x = "bootstrap_ratio", display_bar = FALSE, y = "sign", n_mark = 100)
 ```
