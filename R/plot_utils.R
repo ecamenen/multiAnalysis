@@ -147,6 +147,15 @@ get_ctr <- function(x, i = "var") {
     )
 }
 
+#' @export
+get_ctr0 <- function(x) {
+    sapply(
+        seq(ncol(x)),
+        function(i) {
+            which((x[, i] %>% abs() %>% sort(TRUE)) > (1 / nrow(x)))
+        }
+    )
+}
 
 #' @export
 plot_alluvial <- function(df, col_stratum = NULL, col_alluvium = NULL, label_stratum = NULL, label = NULL) {
@@ -215,4 +224,21 @@ plot_enrich <- function(x, n = 20, title = NULL) {
             colours = c(get_colors()[1], "gray", get_colors()[2])
         ) +
         scale_y_continuous(breaks = df$rank, labels = df$label)
+}
+
+#' @export
+kable0 <- function(x, align = "c") {
+    kbl(x, escape = FALSE, align = align) %>%
+        kable_minimal(full_width = FALSE) %>%
+        column_spec(1, bold = TRUE, color = "#a9a9a9")
+}
+
+#' @export
+add_significance0 <- function(x, p.col = NULL) {
+    add_significance(
+        x,
+        p.col = NULL,
+        cutpoints = c(0, 1e-03, 1e-02, 5e-02, 1),
+        symbols = c("***", "**", "*", "ns")
+    )
 }
