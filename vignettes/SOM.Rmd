@@ -18,18 +18,16 @@ knitr::opts_chunk$set(
 ```{r setup}
 library(multiAnalysis)
 set.seed(123)
-set_analysis(block_name = "clinic_tot_raw")
-set_analysis(block_name = "clinic_still_processed", to_remove = c("1007", "1014"))
-hc_metric <- "pearson"
-blocks <- blocks[[1]]
-n_run <- 100000
+type <- "qual"
+set_analysis(block_name = "clinic_still_processed", to_remove = c("1007", "1014"), type = type)
+hc_metric <- "spearman"
+# blocks <- blocks[[1]]
+n_run <- 1000000
 MAX_CLUSTERS <- 6
 hc_method <- 3
-k <- 4
-colors_k <- brewer.pal(n = 9, name = "Set1")[seq(k) + 2]
 cols <- function(a = 1) {
-      c(rgb(77 / 250, 175 / 250, 75 / 250, a), rgb(150 / 250, 80 / 250, 150 / 250, a), rgb(1, 40 / 250, 45 / 250, a), rgb(1, 0.5, 0, a), rgb(0 / 250, 120 / 250, 180 / 250, a))
-  }
+    c(rgb(77 / 250, 175 / 250, 75 / 250, a), rgb(150 / 250, 80 / 250, 150 / 250, a), rgb(1, 0.5, 0, a), rgb(1, 40 / 250, 45 / 250, a), rgb(0 / 250, 120 / 250, 180 / 250, a), rgb(100 / 250, 50 / 250, 75 / 250, a))
+}
 # c(rgb(77/250, 175/250, 75/250, a),rgb(77/250, 175/250, 75/250, a),rgb(150/250, 80/250, 150/250, a), rgb(150/250, 80/250, 150/250, a)) #, rgb(1, 40/250, 45/250, a), rgb(1, 0.5, 0, a), rgb(0/250, 120/250, 180/250, a))
 
 col_grp <- function(x = som_clusters, a = 1) {
@@ -49,19 +47,29 @@ res_scaled[is.na(res_scaled)] <- 0
 # Modelling
 ```{r}
 som_grid <- somgrid(
-    xdim = 4,
-    ydim = 4,
-    topo = "hexagonal",
-    toroidal = TRUE
+    xdim = 3,
+    ydim = 3,
+    toroidal = TRUE,
+    topo = "hexagonal"
 )
-# som_model <- som(as.matrix(res_scaled), grid = som_grid, rlen = n_run)
-
+model <- "som_model_qual3"
+# assign(
+#   model,
+#   som(
+#     res_scaled_na,
+#     grid = som_grid,
+#     rlen = n_run,
+#     maxNA.fraction = 1,
+#     dist.fcts = "tanimoto"
+#   ),
+#   envir = .GlobalEnv
+# )
 path <- file.path(golem::get_golem_wd())
-file_path <- file.path(path, "data", "som_model_all.RData")
-# save(som_model, file = file_path)
+file_path <- file.path(path, "data", paste0(model, ".RData"))
+# save(som_model_qual3, file = file_path)
 load(file_path)
-
-plot(som_model, type = "changes")
+som_model <- get(model)
+# plot(som_model, type = "changes")
 
 som_inds <- som_model$unit.classif %>% set_names(rownames(blocks))
 print(sapply(seq(max(som_inds)), function(x) names(som_inds[som_inds == x])))
@@ -117,6 +125,7 @@ plotHistogram(df = ctr)
 # ) %>% suppressWarnings()
 # plot_dendrogram(res0, k = k, color = colors_k)
 som_clusters <- cls[[k - 1]]
+
 # som_clusters <- read.csv2(file.path(path, "clusters0.temp.tsv"))$cl0
 ind_clusters <- som_clusters[som_inds]
 ind_clusters %>%
@@ -124,6 +133,14 @@ ind_clusters %>%
     fct_infreq() %>%
     fct_count()
 
+# Chi-test
+if (type == "qual") {
+  chi2(som_clusters, som_codes)
+  chi2(ind_clusters, blocks)
+}
+```
+
+```{r, eval = FALSE}
 # Disease per groups
 names(ind_clusters) <- disease
 lapply(seq(k), function(i) {
@@ -206,10 +223,15 @@ if (hc_method > 2) {
 par(mfrow = c(2, 2))
 plot(som_model, type = "counts", shape = "straight", border = NA)
 dist_neighbours <- plot(som_model, type = "dist.neighbours", shape = "straight", border = NA)
-print_stats(dist_neighbours)
+print_stats(dist_neighbours, 2)
 add.cluster.boundaries(som_model, som_clusters, lwd = 5, col = "white")
 quality <- plot(som_model, type = "quality", shape = "straight", border = NA)
-print_stats(quality)
+print_stats(quality, 2)
+names(ind_clusters) <- rownames(res_scaled_na)
+plot(som_model, type = "changes") -> p
+p
+par(mfrow = c(1, 1))
+
 plot(
     som_model,
     cex = 0.7,
@@ -221,9 +243,27 @@ plot(
     border = NA
 )
 add.cluster.boundaries(som_model, som_clusters, lwd = 5, col = "white")
-par(mfrow = c(1, 1))
+
+plot(
+    som_model,
+    type = "codes",
+    palette.name = function(i) {
+          c(
+              brewer.pal(9, "YlGn")[4:8],
+              brewer.pal(9, "Reds")[c(3, 4, 5, 7)],
+              brewer.pal(9, "Blues")[c(4, 6, 8)],
+              brewer.pal(10, "Paired")[9:10]
+          )
+      },
+    codeRendering = "segments",
+    shape = "straight",
+    border = NA,
+    bg = col_grp(a = 0.25)
+)
+add.cluster.boundaries(som_model, som_clusters, lwd = 20, col = "white")
 
 # plot(som_model, type = "codes", palette.name = rainbow, codeRendering = "segments")
+# plot(som_model, type = "codes", palette.name  = function(i) get_colors()[seq(14)], codeRendering = "segments")
 
 # write.csv2(as.data.frame(ind_clusters), "clusters_som2.temp.tsv")
 ```
