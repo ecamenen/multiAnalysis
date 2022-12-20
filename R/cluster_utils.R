@@ -409,7 +409,7 @@ plotBetweenDiff <- function(between_diff) {
     # savePdf("between_differences.pdf")
     setGraphic()
     plot(2:(length(between_diff) + 1), between_diff, type = "b", ylim = c(round(min(between_diff)) - 1, round(max(between_diff)) + 1), xlim = c(2, (length(between_diff) + 2)), xlab = "Nb. of clusters", ylab = "Between-cluster variation (%)", col = "grey", axes = F)
-    plotBestClustering("Largest between differences method", between_diff, " variation with the previous partitionning (%)", optimal_nb_clusters, n = length(between_diff))
+    plotBestClustering("Largest between differences method", between_diff, " variation with the previous partitionning (%)", optimal_nb_clusters, n = length(between_diff) + 1, interval = 5)
     # suprLog = dev.off()
 }
 
@@ -423,7 +423,7 @@ plotFusionLevels <- function(n, c) {
     setGraphic()
     # savePdf(paste(opt$output9, ".pdf", sep=""))
     plot(2:n, fusion, type = "b", ylim = c(round(min(fusion)) - 1, round(max(fusion)) + 1), xlim = c(2, n + 1), xlab = "Nb. of clusters", ylab = "Cophenetic distance", col = "grey", axes = F)
-    plotBestClustering("Fusion level method", fusion, " gain with the previous fusion level", optimal_nb_clusters, n = n, val2 = diff)
+    plotBestClustering("Fusion level method", fusion, " gain with the previous fusion level", optimal_nb_clusters, n = n, val2 = diff, interval = 5)
     # suprLog = dev.off()
 }
 

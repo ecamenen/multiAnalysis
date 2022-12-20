@@ -72,9 +72,9 @@ plot_silhouette <- function(x, colors = get_colors(), cex = 1) {
 }
 
 #' @export
-get_clusters <- function(x, k) {
-    res <- get_dist(x, stand = FALSE, method = "pearson") %>%
-        hclust(method = "ward.D2") %>%
+get_clusters <- function(x, k, hc_method = "ward.D2", dist_method = "euclidean") {
+    res <- get_dist(x, stand = FALSE, method = dist_method) %>%
+        hclust(method = hc_method) %>%
         cutree(k = k)
     list(cluster = res)
 }
