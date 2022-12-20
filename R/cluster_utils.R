@@ -37,8 +37,8 @@ PNG <- F
 
 printProgress <- function(v, val) {
     if (isTRUE(v)) {
-          cat(paste("\n[", format(Sys.time(), "%X"), "] ", val, "in progress..."), sep = "")
-      }
+        cat(paste("\n[", format(Sys.time(), "%X"), "] ", val, "in progress..."), sep = "")
+    }
 }
 
 getTimeElapsed <- function(start_time) {
@@ -50,8 +50,8 @@ getTimeElapsed <- function(start_time) {
     time <- paste(mins, "min ", round(secs), "s\n", sep = "")
 
     if (hours >= 1) {
-          time <- paste(round(hours), "h ", time, sep = "")
-      }
+        time <- paste(round(hours), "h ", time, sep = "")
+    }
 
     cat(paste("\nTime to run the process : ", time, sep = ""))
 }
@@ -98,20 +98,20 @@ plotBestClustering <- function(sub_title, values, values_type, optimal_nb_cluste
 
     # case of plotting gap statistics
     if (min_x < 2) {
-          best_y <- values[optimal_nb_clusters]
-      } # case of fusion levels
+        best_y <- values[optimal_nb_clusters]
+    } # case of fusion levels
     else if (!is.null(val2)) {
-          best_y <- values[optimal_nb_clusters - 1]
-      } else {
-          best_y <- max(values)
-      }
+        best_y <- values[optimal_nb_clusters - 1]
+    } else {
+        best_y <- max(values)
+    }
 
     # for non-elbow plots
     if (!is.null(val2)) {
-          best <- round(max(val2), 2)
-      } else if (is.null(best)) {
-          best <- round(max(values), 2)
-      }
+        best <- round(max(val2), 2)
+    } else if (is.null(best)) {
+        best <- round(max(values), 2)
+    }
 
     plotAxis(2, min(axisSeq), max(axisSeq), interval)
     title(main = "Optimal number of clusters", line = 2, cex.main = 2)
@@ -120,17 +120,17 @@ plotBestClustering <- function(sub_title, values, values_type, optimal_nb_cluste
     points(optimal_nb_clusters, best_y, pch = 19, col = "red", cex = 2)
 
     if (!is.null(val2)) {
-          t_values <- val2
-      } else {
-          t_values <- values
-      }
+        t_values <- val2
+    } else {
+        t_values <- values
+    }
 
     if (isTRUE(TEXT)) {
-          text(y = values, x = min_x:n, labels = round(t_values, 2), cex = 1.2, pos = 4, col = "red")
-      }
+        text(y = values, x = min_x:n, labels = round(t_values, 2), cex = 1.2, pos = 4, col = "red")
+    }
     if (isTRUE(VERBOSE)) {
-          cat("Optimal number of clusters k = ", optimal_nb_clusters, "\n", "With a", values_type, " of ", best, "\n", sep = "")
-      }
+        cat("Optimal number of clusters k = ", optimal_nb_clusters, "\n", "With a", values_type, " of ", best, "\n", sep = "")
+    }
 }
 
 # f: filename
@@ -159,17 +159,17 @@ getDistance <- function(df, d) {
     dists <- c("euclidian", "manhattan", 1, 2, 5, 7)
 
     if (d < 3) {
-          dist(df, method = dists[d])
-      } else {
-          dist.binary(df, method = as.integer(dists[d]))
-      }
+        dist(df, method = dists[d])
+    } else {
+        dist.binary(df, method = as.integer(dists[d]))
+    }
 }
 
 # d distance object
 checkEuclidean <- function(d) {
     if (attributes(d)$method != "euclidean") {
-          stop("Distance should be euclidean with this classification method.", call. = FALSE)
-      }
+        stop("Distance should be euclidean with this classification method.", call. = FALSE)
+    }
 }
 
 isSymmetric <- function(d) {
@@ -180,8 +180,8 @@ isSymmetric <- function(d) {
             isCommutativity <- unique(d[lower.tri(d)] == t(d)[lower.tri(d)])
 
             if (length(isCommutativity) == 1 & isTRUE(isCommutativity)) {
-                  return(T)
-              }
+                return(T)
+            }
         }
     }
     return(F)
@@ -233,8 +233,8 @@ getClassifType <- function(t) {
 
 # Agglomerative coefficient ()
 getCoefAggl <- function(c) {
-      coef.hclust(c)
-  }
+    coef.hclust(c)
+}
 
 # Inputs:
 # t: number of type of classification
@@ -849,10 +849,10 @@ getCtrVar <- function(k, cl, d) {
     colnames(ctr) <- colnames(d)
 
     for (i in 1:nb_cl) {
-          for (j in 1:ncol(d)) {
-                ctr[i, j] <- ctr[i, j]^2 / (nrow(d) * length(cl[cl == i]))
-            }
-      }
+        for (j in 1:ncol(d)) {
+            ctr[i, j] <- ctr[i, j]^2 / (nrow(d) * length(cl[cl == i]))
+        }
+    }
 
     return(ctr)
 }
@@ -909,8 +909,8 @@ getPdisPerPartition <- function(n, cls, d) {
 #' @export
 getDiscriminantVariables <- function(n, cl, d, m) {
     if (m > ncol(d)) {
-          m <- ncol(d)
-      }
+        m <- ncol(d)
+    }
 
     ctr <- 100 * getCtrVar(n, cl, d)
     max_ctr <- apply(ctr, 2, sum)

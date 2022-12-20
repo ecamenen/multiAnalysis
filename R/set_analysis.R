@@ -28,7 +28,7 @@ set_analysis <- function(block_name = "blocks_clinic", to_remove = NULL) {
         fct_drop() %>%
         fct_infreq() %>%
         fct_relabel(~ str_replace(.x, " \\(.+\\)", ""))
-    colors_ind <<- c("blue", "white", "#cd5b45")
+    colors_ind <<- c("blue", "gray", "#cd5b45")
 }
 
 #' @export

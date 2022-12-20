@@ -155,7 +155,7 @@ plot_mean_test <- function(x, i, stats, color = c("red", "blue")) {
 }
 
 #' @export
-plot_silhouette0 <- function(res_dist, cls, k,  cex = 1) {
+plot_silhouette0 <- function(res_dist, cls, k, cex = 1) {
     sils <- getSilhouettePerPart(cls, res_dist)
     sil_k <- sils[[k - 1]]
     colors_k <- get_colors()[seq(k) + 2]
@@ -196,10 +196,10 @@ get_summary <- function(res_dist, cls, MAX_CLUSTERS, row_dend0 = NULL, k = 2) {
 scale0 <- function(x, method = "zscore") {
     stopifnot(method %in% c("minmax", "zscore"))
     if (method == "minmax") {
-          heatmaply::normalize(x)
-      } else {
-          scale(x)
-      }
+        heatmaply::normalize(x)
+    } else {
+        scale(x)
+    }
 }
 
 #' @export
