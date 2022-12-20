@@ -1,15 +1,22 @@
 #' @export
-theme_perso0 <- function(p) {
+theme_perso0 <- function(p, cex = 1, show_axis = TRUE) {
     axis <- element_text(
         face = "bold.italic",
-        size = 12
+        size = 18 * cex
     )
-    p +
+    p <- p +
         theme(
             axis.title = axis,
-            plot.title = element_text(face = "bold", size = 14, hjust = 0.5),
-            legend.title = element_text(face = "italic")
+            axis.text = element_text(size = 10 * cex),
+            axis.ticks = element_line(size = 1.2),
+            plot.title = element_text(face = "bold", size = 22 * cex, hjust = 0.5),
+            legend.title = element_text(face = "italic", size = 12 * cex),
+            legend.text = element_text(colour = "black", size = 10 * cex)
         )
+    if (show_axis) {
+          p <- p + theme(axis.line = element_line(size = 1.2))
+      }
+    p
 }
 
 #' @export
@@ -91,12 +98,12 @@ plotHistogram <- function(p = NULL, df = NULL, hjust = 0, vjust = 0.5, n = 100, 
         # theme_perso() +
         theme(
             axis.text.y = element_text(size = 12, face = "italic", color = color),
-            axis.text.x = element_text(size = 12, face = "italic", color = "darkgrey"),
+            axis.text.x = element_text(size = 12, face = "italic", color = "darkgrey", angle = 90),
             axis.line = element_blank(),
             axis.ticks = element_blank(),
             plot.subtitle = element_text(hjust = 0.5, size = 16, face = "italic")
         ) +
-        geom_text(aes(label = round(..y.., 2)), hjust = hjust, vjust = vjust) +
+        geom_text(aes(label = round(..y.., 1)), hjust = hjust, vjust = vjust) +
         theme(legend.position = "none") +
         scale_fill_gradient(low = color_gradient[1], high = color_gradient[2])
 }
