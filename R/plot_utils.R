@@ -146,3 +146,73 @@ get_ctr <- function(x, i = "var") {
         }
     )
 }
+
+
+#' @export
+plot_alluvial <- function(df, col_stratum = NULL, col_alluvium = NULL, label_stratum = NULL, label = NULL) {
+    if (is.null(col_stratum)) {
+          col_stratum <- c(rep(get_colors()[seq(2)], 2))
+      }
+    if (is.null(col_alluvium)) {
+          col_alluvium <- c(rep(c(get_colors()[c(2, 4, 8, 1)], "gray40"), 2))
+      }
+    if (is.null(label)) {
+          label <- str_to_title(colnames(df)[seq(2)])
+      }
+    df <- count(df, pull(df, 1), pull(df, 2))
+    fct_count(pull(df, 1))
+    ggplot(df, aes(y = n, axis1 = pull(df, 1), axis2 = pull(df, 2))) +
+        geom_alluvium(fill = col_alluvium, width = 0.5, knot.pos = 0) +
+        geom_stratum(width = 0.5, fill = col_stratum, color = "grey") +
+        geom_text(
+            stat = "stratum",
+            color = "white",
+            aes(label = after_stat(stratum)),
+            size = 8
+        ) +
+        scale_x_discrete(
+            limits = label,
+            expand = c(.05, .05)
+        ) +
+        scale_fill_manual(values = get_colors()[seq(2)]) +
+        scale_y_continuous(
+            breaks = seq(0, 40, 5),
+            minor_breaks = seq(36),
+            sec.axis = sec_axis(trans = ~., name = "n", breaks = seq(0, 40, 5))
+        ) +
+        labs(y = "n") +
+        theme_minimal() +
+        theme(legend.position = "none", axis.ticks.x = element_blank(), panel.grid.major.x = element_blank()) %>%
+        theme_perso0(1.5, show_axis = FALSE)
+}
+
+#' @export
+plot_enrich <- function(x, n = 20, title = NULL) {
+    df <- arrange(x, Adjusted.P.value) %>%
+        head(n) %>%
+        mutate(
+            label = {
+                str_trunc(Term, 50) %>%
+                    str_remove_all("\\(.*") %>%
+                    str_remove_all("((ORPHA)|(WP)|(HSA)|(R-)).*")
+            },
+            Count = str_remove_all(Overlap, "\\/.*") %>% as.numeric(),
+            generatio = {
+                str_split(Overlap, "/") %>%
+                    sapply(function(i) as.numeric(i[1]) / as.numeric(i[2]))
+            },
+            rank = n + 1 - row_number(Adjusted.P.value)
+        )
+    ggplot(df, aes(generatio, rank)) +
+        geom_point(aes(color = Adjusted.P.value, size = Count)) +
+        scale_size(range = c(0.5, 12), name = "Gene count") +
+        theme_minimal() %>%
+        theme_perso0(1) +
+        labs(title = title, x = "Gene ratio", y = "") +
+        theme(axis.ticks.y = element_blank()) +
+        scale_color_gradientn(
+            name = "Adjusted P",
+            colours = c(get_colors()[1], "gray", get_colors()[2])
+        ) +
+        scale_y_continuous(breaks = df$rank, labels = df$label)
+}
