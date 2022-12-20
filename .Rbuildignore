@@ -1,7 +1,8 @@
 ^.*\.Rproj$
 ^\.Rproj\.user$
 ^README\.Rmd$
-^\.idea$
+.*.idea.*
+.*travis.*
 ^dev$
 ^.*\.tar\.gz$
 ^\.github$
@@ -15,4 +16,8 @@
 ^.cache$
 ^.~lock.*
 ^.*\.temp.*
+.*planemo.*
+.*packrat.*
+.*.Meta.*
+.*inst/RGCCA.*
 docker_launch.sh

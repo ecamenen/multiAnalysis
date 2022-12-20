@@ -275,7 +275,7 @@ cl <- cls[[k - 1]]
 n <- 6
 dat <- as.data.frame(clinic_intersect[, colnames(blocks)]) %>%
     cbind(cl = as.character(cl))
-stats <- calculate_test(dat)
+stats <- calculate_test1(dat)
 plot_mean_test(dat, "physician_global_assessment", as_tibble(stats), colors_k)
 
 n <- 8

@@ -1,7 +1,8 @@
 #' @export
 set_analysis <- function(block_name = "blocks_clinic", to_remove = NULL) {
     options(ggrepel.max.overlaps = Inf)
-    path <- file.path(golem::get_golem_wd(), "data")
+    path <<- file.path(golem::get_golem_wd(), "data")
+    path_out <<- file.path(golem::get_golem_wd(), "inst", "results", "tsv")
     libs <- desc::desc_get_deps()$package
     load_libraries(libs[libs != "R"])
 

@@ -18,7 +18,7 @@ knitr::opts_chunk$set(
 ```{r setup}
 library(multiAnalysis)
 set_analysis(block_name = "rna_clinic_still2", type = "list", to_remove = c("1007", "1014", "9001"))
-load_all(path = file.path(golem::get_golem_wd(), "RGCCA"))
+load_all(path = file.path(golem::get_golem_wd(), "inst", "RGCCA"))
 n <- length(blocks)
 ncomp <- 2
 ```

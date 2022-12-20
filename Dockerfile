@@ -14,15 +14,16 @@ ARG TOOL_VERSION
 RUN apt-get update --allow-releaseinfo-change -qq && \
     apt-get install -y ${PKGS}
 RUN apt-get install -y --no-install-recommends libglpk-dev libxt6
-ENV RPKGS ade4 BiocManager corrplot cowplot DataExplorer dendextend devtools dlookr factoextra FactoMineR ggExtra ggforce ggplot2 ggpubr ggrepel ggstatsplot golem heatmaply janitor kableExtra knitr kohonen lintr markdown naniar NbClust pam pheatmap plotly pvclust rlist rmarkdown rstatix styler testthat tidylog tidyverse venn visNetwork
+ENV RPKGS ade4 BiocManager corrplot cowplot DataExplorer dendextend devtools dlookr enrichR factoextra FactoMineR ggalluvial ggExtra ggforce ggnewscale ggplot2 ggpubr ggrepel ggridges ggstatsplot ggupset golem heatmaply janitor kableExtra knitr kohonen lintr markdown naniar NbClust org.Hs.eg.db pam pheatmap pipeR  plotly pvclust rlist rmarkdown rstatix styler testthat tidylog tidyverse venn visNetwork
 RUN Rscript -e "install.packages(commandArgs(TRUE))" ${RPKGS}
-RUN Rscript -e "BiocManager::install('BiocCheck')"
-RUN Rscript -e 'BiocManager::install("mixOmics")'
+RUN Rscript -e 'BiocManager::install(c("BiocCheck", "mixOmics", "clusterProfiler", "pathview", "DESeq2", "tximport", "tximportData"))'
 RUN R -e "devtools::install_github('ecamenen/"${TOOL_NAME}"', ref = '"${TOOL_VERSION}"')"
-RUN Rscript -e 'devtools::install_github("rgcca-factory/RGCCA")'
+RUN Rscript -e 'devtools::install_github("rgcca-factory/RGCCA", ref = "develop")'
 RUN Rscript -e 'devtools::install_github("moldach/vapoRwave")'
 RUN apt-get purge -y git g++ && \
 	apt-get autoremove --purge -y && \
 	apt-get clean && \
 	rm -rf /var/lib/{cache,log}/ /tmp/* /var/tmp/*
 COPY . /home/rstudio
+#RUN mkdir /home/rstudio/inst/RGCCA
+#COPY ../RGCCA /home/rstudio/inst/RGCCA
