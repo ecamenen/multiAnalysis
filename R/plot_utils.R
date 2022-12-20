@@ -120,7 +120,7 @@ theme_perso <- function() {
 
 #' @export
 set_clusters <- function(Y) {
-    path <- file.path(golem::get_golem_wd())
+    path <- file.path(golem::get_golem_wd(), "inst", "results", "tsv")
     cls <- read.csv2(file.path(path, "clusters_som2.temp.tsv"))
     k <- length(unique(cls[, 2]))
     if (!is.null(names(Y))) {

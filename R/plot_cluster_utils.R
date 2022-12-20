@@ -92,7 +92,33 @@ save_tiff <- function(f, filename = "violinplot_clin.tiff") {
 }
 
 #' @export
+calculate_test1 <- function(x, method = "anova") {
+    df <- pivot_longer(x, !cl) %>%
+        group_by(name) %>%
+        # filter(!is.na(value)) %>%
+        base::get(paste0(method, "_test"))(value ~ cl) %>%
+        add_significance()
+    return(df)
+}
+
+#' @export
 calculate_test <- function(x, method = "anova") {
+    df <- pivot_longer(x, !cl)
+    stats <- group_by(df, name, cl) %>%
+        summarise(m = mean(value)) %>%
+        pivot_wider(names_from = cl, values_from = m) %>%
+        mutate(fc2 = Yes / No, fc = Yes - No)
+    df0 <- group_by(df, name)
+    stats0 <- df0 %>% summarise(sd = sd(value))
+    res <- df0 %>%
+        # filter(!is.na(value)) %>%
+        base::get(paste0(method, "_test"))(value ~ cl) %>%
+        add_significance()
+    Reduce(left_join, list(stats, stats0, res)) %>%
+        mutate(D = (Yes - No) / sd)
+}
+
+calculate_test0 <- function(x, method = "lm") {
     df <- pivot_longer(x, !cl) %>%
         group_by(name) %>%
         # filter(!is.na(value)) %>%
@@ -179,4 +205,23 @@ scale0 <- function(x, method = "zscore") {
 #' @export
 print_stats <- function(x, dec = 1) {
     paste(mean(x, na.rm = TRUE) %>% round(dec), "\u00b1", sd(x, na.rm = TRUE) %>% round(dec))
+}
+
+#' @export
+chi2 <- function(cl, x) {
+    temp0 <- data.frame(cls = as.character(cl), x) %>%
+        filter(!is.na(cls)) %>%
+        select(-cls) %>%
+        pivot_longer(everything()) %>%
+        group_by(name) %>%
+        nest()
+    lapply(seq(ncol(x)), function(i) chisq_test(cl, as.data.frame(temp0[i, ]$data)[, 1])) %>%
+        Reduce(rbind, .) %>%
+        cbind(colnames(x), .) %>%
+        arrange(p) %>%
+        adjust_pvalue(method = "BH") %>%
+        add_significance0(p.col = p.adj) %>%
+        select(-c("n", "df", "method", "p", "p.signif")) %>%
+        set_colnames(c("Variables", "Chi²", "P-adjusted", "")) %>%
+        kable0()
 }
