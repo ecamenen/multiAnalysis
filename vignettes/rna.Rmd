@@ -1,0 +1,253 @@
+---
+title: "rna"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{rna}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+# Setup
+```{r setup}
+library(multiAnalysis)
+set_analysis(block_name = "rna_clinic_still", type = "qual")
+rna <- blocks[[2]]
+clinic_intersect <- blocks[[1]]
+treat <- attributes(clinic_intersect)$codes %>%
+    filter(str_detect(item_name, "^response_to")) %>%
+    filter(str_detect(group_name, "response_to_treatments")) %>%
+    pull(item_name)
+vars <- c("NSAIDs", "Paracetamol", "Prednisolone", "Biologic")
+filename_top_genes <- file.path(path_out, "top_genes_muscu.temp.tsv")
+```
+
+# Descriptive stats
+```{r}
+exps <- clinic_intersect %>%
+    mutate(
+        exp = will_have_a_second_visit,
+        second = factor(
+            evolution_of_previous_flare_since_the_last_immun_aid_visit,
+            labels = c("Complete", "No", "Partial")
+        ) %>% fct_relevel(c("Complete", "Partial", "No")),
+        followup = factor(
+            evolution_of_the_disease_since_the_last_visit,
+            labels = c("Complete\n+flare", "Complete", "Partial")
+        ) %>% fct_relevel(c("Complete", "Complete\n+flare", "Partial"))
+    ) %>%
+    select(
+        c(
+            "exp",
+            "second",
+            "followup"
+        )
+    )
+
+manif_vars <- attributes(clinic_intersect)$codes %>%
+    filter(group_name == "is_impacted") %>%
+    pull(item_name)
+manif_df <- select(clinic_intersect, manif_vars) %>%
+    cbind(rna, .) %>%
+    tibble() %>%
+    mutate(cl = ) %>%
+    select(all_of(manif_vars))
+list.map(
+    manif_vars, f(i) ~ {
+        manif_df %>%
+            pull(i) %>%
+            fct_count()
+    }
+) %>%
+    Reduce(function(i, j) left_join(i, j, by = "f"), .) %>%
+    set_colnames(c("Impacted", str_to_title(manif_vars))) %>%
+    slice(2, 1, 3) %>%
+    kable0()
+select(manif_df, mucocutaneous, musculoskeletal) %>% plot_alluvial()
+
+select(clinic_intersect, treat) %>%
+    lapply(fct_count) %>%
+    Reduce(function(i, j) left_join(i, j, by = "f"), .) %>%
+    set_colnames(c("Response", vars)) %>%
+    slice(3, 2, 1, 4) %>%
+    kable0()
+select(clinic_intersect, treat) %>%
+    lapply(function(i) {
+        fct_collapse(i, Yes = c("No", "Partial", "Total")) %>%
+            fct_count()
+    }) %>%
+    Reduce(function(i, j) left_join(i, j, by = "f"), .) %>%
+    set_colnames(c("Treatment", vars)) %>%
+    mutate(Treatment = c("Yes", "No")) %>%
+    kable0()
+
+bind_rows(
+    count(exps, exp, second) %>% set_colnames(c("exp", "var", "n")),
+    count(exps, exp, followup) %>% set_colnames(c("exp", "var", "n"))
+) %>%
+    mutate(exp = c("No", "Yes", rep("", 3), "No", rep("", 2), "Yes", rep("", 2))) %>%
+    set_colnames(c("Experienced", "Response", "n")) %>%
+    select(c("Response", "Experienced", "n")) %>%
+    kable0() %>%
+    pack_rows("Second visit", 1, 5) %>%
+    pack_rows("Follow-up", 6, 11)
+
+count(exps, exp, second, followup) %>%
+    ggplot(aes(y = n, axis1 = second, axis2 = exp, axis3 = followup)) +
+    geom_alluvium(aes(fill = exp), width = 0.5, knot.pos = 0) +
+    geom_stratum(width = 0.5, fill = "black", color = "grey") +
+    geom_text(
+        stat = "stratum",
+        color = "white",
+        aes(label = after_stat(stratum)),
+        size = 8
+    ) +
+    scale_x_discrete(
+        limits = c("Second visit", "Experienced", "Follow-up"),
+        expand = c(.05, .05)
+    ) +
+    scale_fill_manual(values = get_colors()[seq(2)]) +
+    scale_y_continuous(breaks = seq(0, 40, 5), minor_breaks = seq(36)) +
+    labs(y = "n") +
+    theme_minimal() +
+    theme(legend.position = "none", axis.ticks.x = element_blank()) %>%
+    theme_perso0(1.5, show_axis = FALSE)
+
+count(exps, exp, followup) %>%
+    ggplot(aes(
+        x = exp,
+        y = followup,
+        size = n,
+        colour = n
+    )) +
+    geom_text(aes(label = n)) +
+    scale_size(range = c(2, 15), limits = c(0, 25), guide = FALSE) +
+    scale_color_gradientn(colours = colors_ind, limits = c(0, 25)) +
+    theme_minimal() %>%
+    theme_perso0(1.5, show_axis = FALSE) +
+    theme(axis.ticks = element_blank()) +
+    xlab("Experienced") +
+    ylab("Follow-up")
+```
+
+# DE
+```{r, eval = FALSE}
+## Naive vs. experienced
+exp <- clinic_intersect %>%
+    select(c("will_have_a_second_visit", all_of(treat))) %>%
+    set_colnames(c("Experienced", vars))
+
+df <- cbind(rna, exp) %>%
+    tibble() %>%
+    filter(Experienced == "Yes") %>%
+    mutate(cl = ifelse(!is.na(Prednisolone), "Yes", "No") %>% factor()) %>%
+    select(-c("Experienced", all_of(vars)))
+
+## Impacted organ
+df <- cbind(rna, muc = clinic_intersect$musculoskeletal) %>%
+    tibble() %>%
+    mutate(cl = factor(muc)) %>%
+    select(-c(muc))
+
+# res <- select(exp,-seq(11680)) %>% calculate_test(method = "wilcox")
+res <- calculate_test(df, method = "wilcox")
+res <- select(res, -c("No", "Yes", "fc2", "sd", ".y.", "n1", "n2", "NA", "statistic", starts_with("group"))) %>%
+    tibble() %>%
+    adjust_pvalue(method = "BH") %>%
+    add_significance0(p.col = p.adj)
+fc_threshold <- 0.8
+p_threshold <- 0.01
+res <- mutate(
+    res,
+    log2fc = D,
+    log10p = -log(p, 10),
+    Expression = case_when(
+        log2fc >= fc_threshold & p <= p_threshold ~ "Up-regulated",
+        log2fc <= -fc_threshold & p <= p_threshold ~ "Down-regulated",
+        TRUE ~ "ns"
+    )
+)
+
+# filter(res, Expression != "ns")
+get_top <- function(fc_threshold, p_threshold, n = 10) {
+    bind_rows(
+        res %>%
+            filter(log2fc >= fc_threshold & p <= p_threshold),
+        res %>%
+            filter(log2fc <= -fc_threshold & p <= p_threshold)
+    ) %>%
+        arrange(p, desc(abs(log2fc))) %>%
+        head(n)
+}
+
+top_genes <- get_top(1.2, 0.01, 1000)
+get_top(0.8, 0.01, 1000) %>%
+    write_tsv(file = filename_top_genes)
+dea_muscu <- res
+use_data(dea_muscu)
+
+p_lab <- list.mapv(seq(3), f(.) ~ stri_dup("*", .))
+ps <- sapply(c(0.05, 0.01, 0.001), function(x) -log(x, 10))
+ds <- c(-1.2, -0.8, -0.5, 0.5, 0.8, 1.2)
+ggplot(res, aes(log2fc, log10p)) +
+    geom_point(aes(color = Expression), size = 1.5, alpha = 0.5) +
+    geom_vline(xintercept = ds, colour = "gray", lty = 2, lwd = 1.2) +
+    geom_hline(yintercept = ps, colour = "gray", lty = 2, lwd = 1.2) +
+    xlab(expression("Effect size (Cohen's d)")) +
+    ylab(expression("-log"[10] * "P")) +
+    scale_color_manual(values = c("dodgerblue3", "gray50", "firebrick3")) +
+    guides(colour = guide_legend(override.aes = list(size = 2))) +
+    geom_text_repel(
+        data = top_genes,
+        mapping = aes(log2fc, log10p, label = name),
+        size = 3
+    ) +
+    scale_x_continuous(breaks = ds, limits = c(-2, 2)) +
+    scale_y_continuous(breaks = ps, labels = p_lab) +
+    theme_classic() %>%
+    theme_perso0(1.5)
+```
+
+# GSEA
+```{r, eval = FALSE}
+top_genes <- read_tsv(filename_top_genes)
+
+## Enrichr
+library(enrichR)
+setEnrichrSite("Enrichr")
+# listEnrichrDbs()$libraryName[listEnrichrDbs()$libraryName %>% grepl("orphanet", ., ignore.case = TRUE)]
+dbs <- c("GO_Molecular_Function_2021", "GO_Biological_Process_2021", "Orphanet_Augmented_2021", "WikiPathway_2021_Human", "MSigDB_Hallmark_2020", "Reactome_2022")
+enriched <- pull(top_genes, name) %>%
+    enrichr(dbs)
+p <- list.map(
+    enriched,
+    f(i, j) ~ plot_enrich(i, n = 20, title = str_replace_all(dbs[j], "_", " "))
+)
+plot_grid(
+    plotlist = p,
+    nrow = 2,
+    ncol = 3,
+    align = "hv"
+)
+
+## ClusterProfiler
+# TODO: fix
+library(clusterProfiler)
+organism <- "org.Hs.eg.db"
+library(organism, character.only = TRUE)
+gene_list <- pull(res, "log2fc") %>%
+    as.double() %>%
+    setNames(res$name) %>%
+    na.omit() %>%
+    sort(decreasing = TRUE)
+gse <- gseGO(gene_list, ont = "All", OrgDb = organism, keyType = "SYMBOL")
+dotplot(gse, showCategory = 10)
+
+kegg_genes <- bitr(top_genes$name, fromType = "SYMBOL", toType = c("ENTREZID"), OrgDb = "org.Hs.eg.db")
+```
