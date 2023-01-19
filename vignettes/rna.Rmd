@@ -17,19 +17,31 @@ knitr::opts_chunk$set(
 # Setup
 ```{r setup}
 library(multiAnalysis)
-set_analysis(block_name = "rna_clinic_still", type = "qual")
+# set_analysis(block_name = "still_manif", type = "qual")
+set_analysis(block_name = "still_treatment", type = "qual")
+data("rna")
+row_names <- intersect(rownames(rna), rownames(blocks))
+blocks <- list.map(list(blocks, rna), f(i) ~ filter(i, rownames(i) %in% row_names))
 rna <- blocks[[2]]
 clinic_intersect <- blocks[[1]]
-treat <- attributes(clinic_intersect)$codes %>%
-    filter(str_detect(item_name, "^response_to")) %>%
-    filter(str_detect(group_name, "response_to_treatments")) %>%
-    pull(item_name)
-vars <- c("NSAIDs", "Paracetamol", "Prednisolone", "Biologic")
-filename_top_genes <- file.path(path_out, "top_genes_muscu.temp.tsv")
+# treat <- attributes(clinic_intersect)$codes %>%
+#     filter(str_detect(item_name, "^response_to")) %>%
+#     filter(str_detect(group_name, "response_to_treatments")) %>%
+#     pull(item_name)
+# vars <- c("mucocutaneous", "musculoskeletal")
+# vars <- c("Urticaria", "Myocarditis")
+vars <- colnames(clinic_intersect)[-3]
+l_volcano <- list()
+l_enrich <- list()
+library(enrichR)
+setEnrichrSite("Enrichr")
+# listEnrichrDbs()$libraryName[listEnrichrDbs()$libraryName %>% grepl("orphanet", ., ignore.case = TRUE)]
+dbs <- c("GO_Molecular_Function_2021", "GO_Biological_Process_2021", "Orphanet_Augmented_2021", "WikiPathway_2021_Human", "MSigDB_Hallmark_2020", "Reactome_2022")
+i <- 1
 ```
 
 # Descriptive stats
-```{r}
+```{r, eval = FALSE}
 exps <- clinic_intersect %>%
     mutate(
         exp = will_have_a_second_visit,
@@ -136,107 +148,95 @@ count(exps, exp, followup) %>%
     ylab("Follow-up")
 ```
 
-# DE
-```{r, eval = FALSE}
+# DEA
+```{r}
 ## Naive vs. experienced
-exp <- clinic_intersect %>%
-    select(c("will_have_a_second_visit", all_of(treat))) %>%
-    set_colnames(c("Experienced", vars))
-
-df <- cbind(rna, exp) %>%
-    tibble() %>%
-    filter(Experienced == "Yes") %>%
-    mutate(cl = ifelse(!is.na(Prednisolone), "Yes", "No") %>% factor()) %>%
-    select(-c("Experienced", all_of(vars)))
+# exp <- clinic_intersect %>%
+#     select(c("will_have_a_second_visit", all_of(treat))) %>%
+#     set_colnames(c("Experienced", vars))
+#
+# df <- cbind(rna, exp) %>%
+#     tibble() %>%
+#     filter(Experienced == "Yes") %>%
+#     mutate(cl = ifelse(!is.na(Prednisolone), "Yes", "No") %>% factor()) %>%
+#     select(-c("Experienced", all_of(vars)))
 
 ## Impacted organ
-df <- cbind(rna, muc = clinic_intersect$musculoskeletal) %>%
-    tibble() %>%
-    mutate(cl = factor(muc)) %>%
-    select(-c(muc))
+for (var in vars) {
+    # var <- vars[i]
+    filename_top_genes <- file.path(path_out, paste0("top_genes_", tolower(var), ".temp.tsv"))
+    
+    df <- pull(clinic_intersect, var) %>%
+        as.factor() %>%
+        fct_recode(Yes = "1", No = "0") %>%
+        cbind(rna, cl = .) %>%
+        tibble()
 
-# res <- select(exp,-seq(11680)) %>% calculate_test(method = "wilcox")
-res <- calculate_test(df, method = "wilcox")
-res <- select(res, -c("No", "Yes", "fc2", "sd", ".y.", "n1", "n2", "NA", "statistic", starts_with("group"))) %>%
-    tibble() %>%
-    adjust_pvalue(method = "BH") %>%
-    add_significance0(p.col = p.adj)
-fc_threshold <- 0.8
-p_threshold <- 0.01
-res <- mutate(
-    res,
-    log2fc = D,
-    log10p = -log(p, 10),
-    Expression = case_when(
-        log2fc >= fc_threshold & p <= p_threshold ~ "Up-regulated",
-        log2fc <= -fc_threshold & p <= p_threshold ~ "Down-regulated",
-        TRUE ~ "ns"
-    )
-)
+    # res <- select(exp,-seq(11680)) %>% calculate_test(method = "wilcox")
+    # res0 <- calculate_test(df, method = "wilcox")
+    data_path <- file.path(get_golem_wd(), "data", paste0("de_", tolower(var), ".RData"))
+    # save(res0, file = data_path)
+    load(data_path)
+    res <- differential_analysis(res0)
 
-# filter(res, Expression != "ns")
-get_top <- function(fc_threshold, p_threshold, n = 10) {
-    bind_rows(
-        res %>%
-            filter(log2fc >= fc_threshold & p <= p_threshold),
-        res %>%
-            filter(log2fc <= -fc_threshold & p <= p_threshold)
-    ) %>%
-        arrange(p, desc(abs(log2fc))) %>%
-        head(n)
+    get_top(res, n = 100) %>%
+        write_tsv(file = filename_top_genes)
+    # 1.2, 0.05, 0.8, 0.01
+    # 0.8, 0.05, 0.8, 0.01
+    # 0.8, 0.01, 1.2, 0.01
+    # 0.8, 0.05, 0.8, 0.01
+    # 0.8, 0.01, 1.2, 0.01
+    (volcano <- get_top(res, n = 10) %>% volcano_plot(res, ., var, "none", 1.7) + xlab("") + ylab(""))
+    l_volcano <- list.append(l_volcano, volcano)
 }
-
-top_genes <- get_top(1.2, 0.01, 1000)
-get_top(0.8, 0.01, 1000) %>%
-    write_tsv(file = filename_top_genes)
-dea_muscu <- res
-use_data(dea_muscu)
-
-p_lab <- list.mapv(seq(3), f(.) ~ stri_dup("*", .))
-ps <- sapply(c(0.05, 0.01, 0.001), function(x) -log(x, 10))
-ds <- c(-1.2, -0.8, -0.5, 0.5, 0.8, 1.2)
-ggplot(res, aes(log2fc, log10p)) +
-    geom_point(aes(color = Expression), size = 1.5, alpha = 0.5) +
-    geom_vline(xintercept = ds, colour = "gray", lty = 2, lwd = 1.2) +
-    geom_hline(yintercept = ps, colour = "gray", lty = 2, lwd = 1.2) +
-    xlab(expression("Effect size (Cohen's d)")) +
-    ylab(expression("-log"[10] * "P")) +
-    scale_color_manual(values = c("dodgerblue3", "gray50", "firebrick3")) +
-    guides(colour = guide_legend(override.aes = list(size = 2))) +
-    geom_text_repel(
-        data = top_genes,
-        mapping = aes(log2fc, log10p, label = name),
-        size = 3
-    ) +
-    scale_x_continuous(breaks = ds, limits = c(-2, 2)) +
-    scale_y_continuous(breaks = ps, labels = p_lab) +
-    theme_classic() %>%
-    theme_perso0(1.5)
 ```
 
-# GSEA
+# Enrichment
 ```{r, eval = FALSE}
-top_genes <- read_tsv(filename_top_genes)
+for (var in vars) {
+    top_genes <- read_tsv(filename_top_genes)
 
-## Enrichr
-library(enrichR)
-setEnrichrSite("Enrichr")
-# listEnrichrDbs()$libraryName[listEnrichrDbs()$libraryName %>% grepl("orphanet", ., ignore.case = TRUE)]
-dbs <- c("GO_Molecular_Function_2021", "GO_Biological_Process_2021", "Orphanet_Augmented_2021", "WikiPathway_2021_Human", "MSigDB_Hallmark_2020", "Reactome_2022")
-enriched <- pull(top_genes, name) %>%
-    enrichr(dbs)
-p <- list.map(
-    enriched,
-    f(i, j) ~ plot_enrich(i, n = 20, title = str_replace_all(dbs[j], "_", " "))
-)
-plot_grid(
-    plotlist = p,
+    ## Enrichr
+    enriched <- pull(top_genes, name) %>%
+        enrichr(dbs)
+    p <- list.map(
+        enriched,
+        f(i, j) ~ plot_enrich(i, n = 20, title = str_replace_all(dbs[j], "_", " "))
+    )
+    p_enrich <- plot_grid(
+        plotlist = p,
+        nrow = 2,
+        ncol = 3,
+        align = "hv"
+    )
+    save_tiff(p_enrich, file.path(path_img, paste0("enrichment_", tolower(var))), 8000, 4000)
+    l_enrich <- list.append(l_enrich, p)
+    # l_enrich[[i]] <- p
+    # i = i + 1
+}
+
+# vars <- c("Mucocutaneous", "Musculoskeletal", "Urticaria", "Myocarditis")
+p_enrich_biol <- list.map(l_enrich, f(i, j) ~ pluck(i, 5) + ggtitle(vars[j]))
+p_enrich <- plot_grid(
+    plotlist = c(p_enrich_biol[seq(2)], list(NULL), p_enrich_biol[3:4]),
     nrow = 2,
     ncol = 3,
     align = "hv"
 )
+save_tiff(p_enrich, file.path(path_img, paste0("enrichment_hallmark_treat")), 8000, 4000)
 
-## ClusterProfiler
+(p_volcano <- plot_grid(
+    plotlist = c(l_volcano[seq(2)], list(NULL), l_volcano[3:4]),
+    nrow = 2,
+    ncol = 3,
+    align = "hv"
+))
+# 3000, 2000
+save_tiff(p_volcano, file.path(path_img, "volcano_treat"), 8000, 4000)
+```
+
+```{r, eval = FALSE}
+# ClusterProfiler
 # TODO: fix
 library(clusterProfiler)
 organism <- "org.Hs.eg.db"
@@ -251,3 +251,4 @@ dotplot(gse, showCategory = 10)
 
 kegg_genes <- bitr(top_genes$name, fromType = "SYMBOL", toType = c("ENTREZID"), OrgDb = "org.Hs.eg.db")
 ```
+
