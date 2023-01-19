@@ -14,8 +14,8 @@ theme_perso0 <- function(p, cex = 1, show_axis = TRUE) {
             legend.text = element_text(colour = "black", size = 10 * cex)
         )
     if (show_axis) {
-          p <- p + theme(axis.line = element_line(size = 1.2))
-      }
+        p <- p + theme(axis.line = element_line(size = 1.2))
+    }
     p
 }
 
@@ -160,14 +160,14 @@ get_ctr0 <- function(x) {
 #' @export
 plot_alluvial <- function(df, col_stratum = NULL, col_alluvium = NULL, label_stratum = NULL, label = NULL) {
     if (is.null(col_stratum)) {
-          col_stratum <- c(rep(get_colors()[seq(2)], 2))
-      }
+        col_stratum <- c(rep(get_colors()[seq(2)], 2))
+    }
     if (is.null(col_alluvium)) {
-          col_alluvium <- c(rep(c(get_colors()[c(2, 4, 8, 1)], "gray40"), 2))
-      }
+        col_alluvium <- c(rep(c(get_colors()[c(2, 4, 8, 1)], "gray40"), 2))
+    }
     if (is.null(label)) {
-          label <- str_to_title(colnames(df)[seq(2)])
-      }
+        label <- str_to_title(colnames(df)[seq(2)])
+    }
     df <- count(df, pull(df, 1), pull(df, 2))
     fct_count(pull(df, 1))
     ggplot(df, aes(y = n, axis1 = pull(df, 1), axis2 = pull(df, 2))) +
@@ -196,7 +196,7 @@ plot_alluvial <- function(df, col_stratum = NULL, col_alluvium = NULL, label_str
 }
 
 #' @export
-plot_enrich <- function(x, n = 20, title = NULL) {
+plot_enrich <- function(x, n = 20, title = NULL, cex = 1) {
     df <- arrange(x, Adjusted.P.value) %>%
         head(n) %>%
         mutate(
@@ -216,14 +216,15 @@ plot_enrich <- function(x, n = 20, title = NULL) {
         geom_point(aes(color = Adjusted.P.value, size = Count)) +
         scale_size(range = c(0.5, 12), name = "Gene count") +
         theme_minimal() %>%
-        theme_perso0(1) +
+        theme_perso0(cex) +
         labs(title = title, x = "Gene ratio", y = "") +
         theme(axis.ticks.y = element_blank()) +
         scale_color_gradientn(
             name = "Adjusted P",
             colours = c(get_colors()[1], "gray", get_colors()[2])
         ) +
-        scale_y_continuous(breaks = df$rank, labels = df$label)
+        scale_y_continuous(breaks = df$rank, labels = df$label) +
+        theme(axis.text.y = element_text(size = 13 * cex))
 }
 
 #' @export
@@ -241,4 +242,61 @@ add_significance0 <- function(x, p.col = NULL) {
         cutpoints = c(0, 1e-03, 1e-02, 5e-02, 1),
         symbols = c("***", "**", "*", "ns")
     )
+}
+
+#' @export
+volcano_plot <- function(res, top_genes, title = "", legend = "right", cex = 1.5) {
+    p_lab <- list.mapv(seq(3), f(.) ~ stri_dup("*", .))
+    ps <- sapply(c(0.05, 0.01, 0.001), function(x) -log(x, 10))
+    ds <- c(-1.2, -0.8, -0.5, 0.5, 0.8, 1.2)
+    ggplot(res, aes(log2fc, log10p)) +
+        geom_point(aes(color = Expression), size = cex * 1.5, alpha = 0.5) +
+        geom_vline(xintercept = ds, colour = "gray", lty = 2, lwd = 1.2) +
+        geom_hline(yintercept = ps, colour = "gray", lty = 2, lwd = 1.2) +
+        xlab(expression("Effect size (Cohen's d)")) +
+        ylab(expression("-log"[10] * "P")) +
+        scale_color_manual(values = c("dodgerblue3", "gray50", "firebrick3")) +
+        guides(colour = guide_legend(override.aes = list(size = 2))) +
+        geom_text_repel(
+            data = top_genes,
+            mapping = aes(log2fc, log10p, label = name),
+            size = cex * 3
+        ) +
+        scale_x_continuous(breaks = ds, limits = c(-2, 2)) +
+        scale_y_continuous(breaks = ps, labels = p_lab) +
+        ggtitle(label = title) +
+        theme_classic() %>%
+        theme_perso0(cex) +
+        theme(legend.position = legend)
+}
+
+# filter(res, Expression != "ns")
+#' @export
+get_top <- function(res, fc_threshold = 0.08, p_threshold = 0.05, n = 1000) {
+    bind_rows(
+        res %>%
+            filter(log2fc >= fc_threshold & p <= p_threshold),
+        res %>%
+            filter(log2fc <= -fc_threshold & p <= p_threshold)
+    ) %>%
+        arrange(p, desc(abs(log2fc))) %>%
+        head(n)
+}
+
+
+#' @export
+differential_analysis <- function(x, fc_threshold = 0.8, p_threshold = 0.01) {
+    select(x, -c(contains(c("No", "Yes", "fc2", "sd", ".y.", "n1", "n2", "NA", "statistic")), starts_with("group"))) %>%
+        tibble() %>%
+        adjust_pvalue(method = "BH") %>%
+        add_significance0(p.col = p.adj) %>%
+        mutate(
+            log2fc = D,
+            log10p = -log(p, 10),
+            Expression = case_when(
+                log2fc >= fc_threshold & p <= p_threshold ~ "Up-regulated",
+                log2fc <= -fc_threshold & p <= p_threshold ~ "Down-regulated",
+                TRUE ~ "ns"
+            )
+        )
 }
