@@ -196,7 +196,7 @@ plot_alluvial <- function(df, col_stratum = NULL, col_alluvium = NULL, label_str
 }
 
 #' @export
-plot_enrich <- function(x, n = 20, title = NULL, cex = 1) {
+plot_enrich <- function(x, n = 20, title = NULL) {
     df <- arrange(x, Adjusted.P.value) %>%
         head(n) %>%
         mutate(
@@ -216,15 +216,14 @@ plot_enrich <- function(x, n = 20, title = NULL, cex = 1) {
         geom_point(aes(color = Adjusted.P.value, size = Count)) +
         scale_size(range = c(0.5, 12), name = "Gene count") +
         theme_minimal() %>%
-        theme_perso0(cex) +
+        theme_perso0(1) +
         labs(title = title, x = "Gene ratio", y = "") +
         theme(axis.ticks.y = element_blank()) +
         scale_color_gradientn(
             name = "Adjusted P",
             colours = c(get_colors()[1], "gray", get_colors()[2])
         ) +
-        scale_y_continuous(breaks = df$rank, labels = df$label) +
-        theme(axis.text.y = element_text(size = 13 * cex))
+        scale_y_continuous(breaks = df$rank, labels = df$label)
 }
 
 #' @export
@@ -245,15 +244,15 @@ add_significance0 <- function(x, p.col = NULL) {
 }
 
 #' @export
-volcano_plot <- function(res, top_genes, title = "", legend = "right", cex = 1.5) {
-    p_lab <- list.mapv(seq(3), f(.) ~ stri_dup("*", .))
+volcano_plot <- function(res, top_genes, title = "", legend = "right", cex = 1.5, xtitle = expression("Effect size (Cohen's d)")) {
+    # p_lab <- list.mapv(seq(3), f(.) ~ stri_dup("*", .))
     ps <- sapply(c(0.05, 0.01, 0.001), function(x) -log(x, 10))
-    ds <- c(-1.2, -0.8, -0.5, 0.5, 0.8, 1.2)
+    # ds <- c(-1.2, -0.8, -0.5, 0.5, 0.8, 1.2)
     ggplot(res, aes(log2fc, log10p)) +
-        geom_point(aes(color = Expression), size = cex * 1.5, alpha = 0.5) +
-        geom_vline(xintercept = ds, colour = "gray", lty = 2, lwd = 1.2) +
+        geom_point(aes(color = Expression), size = 3, alpha = 0.5) +
+        # geom_vline(xintercept = ds, colour = "gray", lty = 2, lwd = 1.2) +
         geom_hline(yintercept = ps, colour = "gray", lty = 2, lwd = 1.2) +
-        xlab(expression("Effect size (Cohen's d)")) +
+        xlab(xtitle) +
         ylab(expression("-log"[10] * "P")) +
         scale_color_manual(values = c("dodgerblue3", "gray50", "firebrick3")) +
         guides(colour = guide_legend(override.aes = list(size = 2))) +
@@ -262,8 +261,8 @@ volcano_plot <- function(res, top_genes, title = "", legend = "right", cex = 1.5
             mapping = aes(log2fc, log10p, label = name),
             size = cex * 3
         ) +
-        scale_x_continuous(breaks = ds, limits = c(-2, 2)) +
-        scale_y_continuous(breaks = ps, labels = p_lab) +
+        scale_x_continuous(limits = max(abs(res$log2fc)) * c(-1, 1)) +
+        # scale_y_continuous(breaks = ps, labels = p_lab) +
         ggtitle(label = title) +
         theme_classic() %>%
         theme_perso0(cex) +

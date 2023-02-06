@@ -1,0 +1,170 @@
+---
+title: "DSeq2"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{DSeq2}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+```{r}
+library(multiAnalysis)
+# Load matrix for treatment
+# set_analysis(block_name = "still_treatment", type = "qual")
+set_analysis(block_name = "still_manif", type = "qual")
+# Extract variable for discrimination
+batches <- clinic_transf$batch %>% set_names(row.names(clinic_transf))
+```
+
+```{r}
+# Load the count matrix
+path <- file.path(golem::get_golem_wd(), "inst", "extdata")
+processed_matrix <- read_tsv(file = file.path(path, "processed_gene_matrix.tsv"))
+counts_matrix <- read_delim(file = file.path(path, "raw_gene_matrix.txt"), delim = " ", skip = 1, col_names = colnames(processed_matrix))
+```
+
+```{r}
+# Split the visits
+l_visits <- list.map(
+    c("A", "B"),
+    f(i) ~ {
+        str_detect(colnames(counts_matrix), paste0("^(\\d{5})", i)) %>%
+            which() %>%
+            c(1, .) %>%
+            select(counts_matrix, .)
+    }
+)
+
+# Formatting the patient names
+col_names <- list.map(l_visits, f(.) ~ {
+    colnames(.) %>%
+        str_remove_all("(A|B)05PB1") %>%
+        as.numeric() %>%
+        sort()
+})
+
+# Select visit A, rename columns, order by patient ID
+visit_a <- set_colnames(l_visits[["A"]], colnames(l_visits[["A"]]) %>% str_replace_all(paste0("0?(\\d{4})(A|B)05PB1"), "\\1")) %>%
+    select(c("GeneName", as.character(col_names[["A"]])))
+gene_name <- counts_matrix$GeneName
+counts_matrix <- visit_a
+# Filter by common rows
+common_rows <- Reduce(intersect, list(colnames(counts_matrix), rownames(blocks), names(batches)))
+counts_matrix <- select(counts_matrix, common_rows)
+
+blocks <- data.frame(blocks)[common_rows, ] %>% select(c("Urticaria", "Myocarditis")) # %>% select(-c(3, 6))
+batches <- batches[common_rows]
+```
+
+```{r}
+library(biomaRt)
+# db_annot <- useEnsembl(biomart = "genes", dataset = "hsapiens_gene_ensembl")
+# filter(datasets, str_detect(description, "Human")) %>% pull(version)
+
+# gene_query <- getBM(
+#     attributes = c("ensembl_gene_id", "hgnc_symbol"),
+#         filters = "ensembl_gene_id",
+#         values = gene_name,
+#         mart = db_annot
+#     )
+
+gene_query <- read_tsv(file = file.path(path, "martquery.tsv")) %>% set_colnames(c("ensembl_gene_id", "hgnc_symbol"))
+# which(is.na(gene_query$`Gene name`)) %>% length()
+gene_query[duplicated(gene_query$ensembl_gene_id) %>% which(), ] %>%
+    pull(ensembl_gene_id) %>%
+    paste0("^", ., "$") %>%
+    list.map(., f(i) ~ filter(gene_query, str_detect(ensembl_gene_id, i)))
+
+# duplicates <- gene_query[duplicated(gene_query$ensembl_gene_id) %>% which(), 1]
+# gene_query <- gene_query[!gene_query$ensembl_gene_id %in% duplicates, ] %>% rbind(data.frame(ensembl_gene_id = c("ENSG00000277796", "ENSG00000277768", "ENSG00000277336", "ENSG00000276085", "ENSG00000230417"), hgnc_symbol = c(rep("CCL3L1/3", 4), "LINC00595/LINC00856")))
+
+counts_matrix <- mutate(counts_matrix, ensembl_gene_id = gene_name) %>%
+    left_join(gene_query) %>%
+    arrange(hgnc_symbol) %>%
+    select(-ensembl_gene_id) %>%
+    mutate(hgnc_symbol = str_replace_all(hgnc_symbol, "^$", "Unkown"))
+counts_matrix[is.na(counts_matrix)] <- "Unknown"
+gene_hgnc <- pull(counts_matrix, hgnc_symbol) %>%
+    sort() %>%
+    janitor::make_clean_names()
+counts_matrix <- select(counts_matrix, -hgnc_symbol) %>%
+    data.frame() %>%
+    set_rownames(gene_hgnc) %>%
+    set_colnames(colnames(counts_matrix)[-36] %>% str_remove_all("^X"))
+# use_data(counts_matrix, overwrite = TRUE)
+```
+
+```{r, eval = FALSE}
+library(sva)
+counts_combat <- as.matrix(counts_matrix) %>%
+    set_rownames(gene_name) %>%
+    ComBat_seq(batches) %>%
+    as.data.frame()
+counts_combat_HUGO <- ensembl_to_hugo(ensembl_hgnc, counts_combat)
+```
+
+```{r}
+# setA <- select(counts_matrix, which(groups == 0) %>% names())
+# setB <- select(counts_matrix, which(groups == 1) %>% names())
+# comparison <- cbind(setA, setB)
+# exprs_threshold <- 1 * NCOL(counts_matrix)
+library(DESeq2)
+filtered_counts <- counts_matrix %>%
+    filter(apply(., 1, sum) > 10) %>%
+    round()
+
+l_de_manif <- l_de <- list.map(colnames(blocks), f(i) ~ {
+    DESeqDataSetFromMatrix(
+        countData = filtered_counts,
+        colData = data.frame(group = factor(blocks[, i]), batch = factor(batches)),
+        design = ~ batch + group
+    ) %>% DESeq()
+})
+
+list.map(l_de, f(i) ~ results(i) %>% as.data.frame() %>% filter(!is.na(padj)) %>% filter(log2FoldChange >= 1 | log2FoldChange <= -1) %>% filter(padj <= 0.05) %>% arrange(padj))
+
+list.map(l_de, f(i, k, j) ~ results(i) %>% as.data.frame() %>% mutate(log2fc = log2FoldChange, p = padj, log10p = -log(padj, 10), name = rownames(.) %>% str_remove_all("_\\d*") %>% toupper(), Expression = case_when(
+    log2FoldChange >= 1 & padj <= 0.5 ~ "Up-regulated",
+    log2FoldChange <= -1 & padj <= 0.5 ~ "Down-regulated",
+    TRUE ~ "ns"
+)) %>% volcano_plot(get_top(., 1, n = 15), cex = 2, title = j, xtitle = expression("log"[2] * "FC"), legend = "none") + xlab("") + ylab("")) %>%
+    list(pluck(., 1), NULL, NULL, pluck(., 2)) %>%
+    plot_grid(
+        plotlist = .,
+        nrow = 2,
+        ncol = 3,
+        align = "hv"
+    ) %>%
+    save_tiff(file.path(path_img, "volcano_b"), 8000, 4000)
+
+res <- results(l_de[[1]])
+summary(res)
+without_unknown <- res %>%
+    as.data.frame() %>%
+    filter(!str_detect(rownames(.), "unknown"))
+(de_genes <- res %>% as.data.frame() %>% arrange(padj) %>% filter(padj <= 0.05))
+
+de_gene_names <- de_genes %>%
+    rownames() %>%
+    str_remove_all("_\\d") %>%
+    unique() %>%
+    toupper()
+de_genes_ranked <- without_unknown$log2FoldChange %>%
+    set_names(rownames(without_unknown) %>% str_remove_all("_\\d*") %>% toupper()) %>%
+    sort(decreasing = TRUE)
+# plotMA(res, alpha = 0.05, colSig = "red", ylim = 3 * c(-1, 1))
+res %>%
+    as.data.frame() %>%
+    arrange(desc(log2FoldChange)) %>%
+    head()
+# plotCounts(dds, gene="nkapl", intgroup="group")
+use_data(l_de_manif, overwrite = TRUE)
+```
+
