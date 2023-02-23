@@ -17,10 +17,10 @@ knitr::opts_chunk$set(
 ```{r}
 library(multiAnalysis)
 # Load matrix for treatment
-# set_analysis(block_name = "still_treatment", type = "qual")
-set_analysis(block_name = "still_manif", type = "qual")
+set_analysis(block_name = "still_treatment_post", type = "qual")
+# set_analysis(block_name = "still_manif", type = "qual")
 # Extract variable for discrimination
-batches <- clinic_transf$batch %>% set_names(row.names(clinic_transf))
+batches <- clinic_intersect$batch %>% set_names(row.names(clinic_intersect))
 ```
 
 ```{r}
@@ -59,13 +59,14 @@ counts_matrix <- visit_a
 common_rows <- Reduce(intersect, list(colnames(counts_matrix), rownames(blocks), names(batches)))
 counts_matrix <- select(counts_matrix, common_rows)
 
-blocks <- data.frame(blocks)[common_rows, ] %>% select(c("Urticaria", "Myocarditis")) # %>% select(-c(3, 6))
+blocks <- data.frame(blocks)[common_rows, ] %>% select(contains(c("Mucocutaneous", "Musculoskeletal", "Urticaria", "Myocarditis", "Corticosteroid", "DMARDs", "Anti.IL1", "Anti.IL6")))
 batches <- batches[common_rows]
 ```
 
 ```{r}
 library(biomaRt)
-# db_annot <- useEnsembl(biomart = "genes", dataset = "hsapiens_gene_ensembl")
+# db_annot <- useEnsembl(biomart = "genes", dataset = "hsapiens_gene_ensembl", version = 104)
+# datasets <- listDatasets(db_annot)
 # filter(datasets, str_detect(description, "Human")) %>% pull(version)
 
 # gene_query <- getBM(
@@ -88,16 +89,17 @@ gene_query[duplicated(gene_query$ensembl_gene_id) %>% which(), ] %>%
 counts_matrix <- mutate(counts_matrix, ensembl_gene_id = gene_name) %>%
     left_join(gene_query) %>%
     arrange(hgnc_symbol) %>%
-    select(-ensembl_gene_id) %>%
+    # select(-ensembl_gene_id) %>%
     mutate(hgnc_symbol = str_replace_all(hgnc_symbol, "^$", "Unkown"))
 counts_matrix[is.na(counts_matrix)] <- "Unknown"
+counts_matrix <- data.frame(counts_matrix) %>%
+    arrange(hgnc_symbol)
 gene_hgnc <- pull(counts_matrix, hgnc_symbol) %>%
-    sort() %>%
-    janitor::make_clean_names()
-counts_matrix <- select(counts_matrix, -hgnc_symbol) %>%
-    data.frame() %>%
-    set_rownames(gene_hgnc) %>%
-    set_colnames(colnames(counts_matrix)[-36] %>% str_remove_all("^X"))
+    snakecase::to_any_case(case = "none", sep_in = NULL, unique_sep = "_")
+ensembl_ids <- pull(counts_matrix, ensembl_gene_id)
+counts_matrix <- select(counts_matrix, -c(hgnc_symbol)) %>%
+    set_colnames(colnames(counts_matrix)[-c(38)] %>% str_remove_all("^X")) %>%
+    set_rownames(gene_hgnc)
 # use_data(counts_matrix, overwrite = TRUE)
 ```
 
@@ -116,36 +118,55 @@ counts_combat_HUGO <- ensembl_to_hugo(ensembl_hgnc, counts_combat)
 # comparison <- cbind(setA, setB)
 # exprs_threshold <- 1 * NCOL(counts_matrix)
 library(DESeq2)
-filtered_counts <- counts_matrix %>%
-    filter(apply(., 1, sum) > 10) %>%
-    round()
-
-l_de_manif <- l_de <- list.map(colnames(blocks), f(i) ~ {
+filtered_counts <- counts_matrix[apply(select(counts_matrix, -ensembl_gene_id), 1, sum) > 10, ]
+ensembl_ids <- pull(filtered_counts, ensembl_gene_id)
+filtered_counts <- select(filtered_counts, -ensembl_gene_id) %>% round()
+l_de0 <- list.map(colnames(blocks), f(i) ~ {
     DESeqDataSetFromMatrix(
         countData = filtered_counts,
         colData = data.frame(group = factor(blocks[, i]), batch = factor(batches)),
         design = ~ batch + group
     ) %>% DESeq()
 })
+# results() %>%
+l_de <- list.map(l_de0, f(i) ~ lfcShrink(i, coef = "group_1_vs_0") %>%
+    as.data.frame())
+```
 
-list.map(l_de, f(i) ~ results(i) %>% as.data.frame() %>% filter(!is.na(padj)) %>% filter(log2FoldChange >= 1 | log2FoldChange <= -1) %>% filter(padj <= 0.05) %>% arrange(padj))
-
-list.map(l_de, f(i, k, j) ~ results(i) %>% as.data.frame() %>% mutate(log2fc = log2FoldChange, p = padj, log10p = -log(padj, 10), name = rownames(.) %>% str_remove_all("_\\d*") %>% toupper(), Expression = case_when(
-    log2FoldChange >= 1 & padj <= 0.5 ~ "Up-regulated",
-    log2FoldChange <= -1 & padj <= 0.5 ~ "Down-regulated",
+```{r}
+list.map(l_de, f(i, k, j) ~ i %>% mutate(log2fc = log2FoldChange, p = pvalue, log10p = -log(padj, 10), name = rownames(.) %>% str_remove_all("_\\d*") %>% toupper(), Expression = case_when(
+    log2FoldChange >= 1 & padj <= 0.05 ~ "Up-regulated",
+    log2FoldChange <= -1 & padj <= 0.05 ~ "Down-regulated",
     TRUE ~ "ns"
-)) %>% volcano_plot(get_top(., 1, n = 15), cex = 2, title = j, xtitle = expression("log"[2] * "FC"), legend = "none") + xlab("") + ylab("")) %>%
-    list(pluck(., 1), NULL, NULL, pluck(., 2)) %>%
+)) %>% filter(log2FoldChange >= 0.01 | log2FoldChange <= -0.01) %>%
+    volcano_plot(get_top(., n = 30), cex = 3, title = str_replace(j, "\\.", "-"), xtitle = expression("log"[2] * "FC"), legend = "none") + xlab("") + ylab("")) %>%
+    list(pluck(., 1), pluck(., 2), NULL, pluck(., 3), pluck(., 4)) %>%
+    # list(pluck(., 1), NULL, NULL, pluck(., 2)) %>%
     plot_grid(
         plotlist = .,
         nrow = 2,
         ncol = 3,
         align = "hv"
     ) %>%
-    save_tiff(file.path(path_img, "volcano_b"), 8000, 4000)
+    save_tiff(file.path(path_img, "volcano_treat_b"), 8000, 4000)
+```
 
-res <- results(l_de[[1]])
+
+
+```{r, eval = FALSE}
+list.map(l_de, f(i) ~ filter(i, !is.na(padj)) %>% filter(log2FoldChange >= 1 | log2FoldChange <= -1) %>% filter(padj <= 0.05) %>% arrange(padj))
+
+de_gene_names <- list.map(l_de, f(i) ~ mutate(i, log2fc = log2FoldChange) %>% filter(!is.na(padj)) %>% filter(!str_detect(rownames(.), "unknown")) %>% get_top(0.5, 1) %>% rownames() %>%
+    str_remove_all("_\\d") %>%
+    unique() %>%
+    toupper())
+
+res <- results(l_de0[[4]])
 summary(res)
+as.data.frame(res) %>%
+    arrange(log2FoldChange) %>%
+    head()
+
 without_unknown <- res %>%
     as.data.frame() %>%
     filter(!str_detect(rownames(.), "unknown"))
@@ -164,7 +185,17 @@ res %>%
     as.data.frame() %>%
     arrange(desc(log2FoldChange)) %>%
     head()
-# plotCounts(dds, gene="nkapl", intgroup="group")
-use_data(l_de_manif, overwrite = TRUE)
+plotCounts(l_de0[[4]], gene = "HLA-DQA1_4", intgroup = "group", returnData = TRUE) %>%
+    mutate(group = factor(group, labels = c("Yes", "No"))) %>%
+    ggplot(aes(x = group, y = count, color = group)) +
+    geom_point(position = position_jitter(w = 0.1, h = 0)) +
+    scale_y_log10(breaks = c(25, 100, 400)) +
+    theme_bw() +
+    ylab("Count") +
+    xlab("Anti-IL6") +
+    scale_color_manual(values = get_colors()[c(3, 1)], name = "Anti-IL6") +
+    theme(legend.position = "none")
+# use_data(l_de_manif, overwrite = TRUE)
+```
 ```
 
