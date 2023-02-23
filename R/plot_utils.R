@@ -97,7 +97,7 @@ plotHistogram <- function(p = NULL, df = NULL, hjust = 0, vjust = 0.5, n = 100, 
         # theme_classic() +
         # theme_perso() +
         theme(
-            axis.text.y = element_text(size = 12, face = "italic", color = color),
+            axis.text.y = element_text(size = 16, face = "italic", color = color),
             axis.text.x = element_text(size = 12, face = "italic", color = "darkgrey", angle = 90),
             axis.line = element_blank(),
             axis.ticks = element_blank(),
@@ -196,7 +196,7 @@ plot_alluvial <- function(df, col_stratum = NULL, col_alluvium = NULL, label_str
 }
 
 #' @export
-plot_enrich <- function(x, n = 20, title = NULL) {
+plot_enrich <- function(x, n = 20, title = NULL, gsea = FALSE, cex = 1, ratio = 5) {
     df <- arrange(x, Adjusted.P.value) %>%
         head(n) %>%
         mutate(
@@ -205,25 +205,41 @@ plot_enrich <- function(x, n = 20, title = NULL) {
                     str_remove_all("\\(.*") %>%
                     str_remove_all("((ORPHA)|(WP)|(HSA)|(R-)).*")
             },
+            rank = n + 1 - row_number(Adjusted.P.value)
+        )
+    if(gsea) {
+        df <- mutate(
+            df,
+            generatio = str_split(Overlap, "/") %>% sapply(length)
+        )
+    } else {
+        df <- mutate(
+            df,
             Count = str_remove_all(Overlap, "\\/.*") %>% as.numeric(),
             generatio = {
                 str_split(Overlap, "/") %>%
                     sapply(function(i) as.numeric(i[1]) / as.numeric(i[2]))
-            },
-            rank = n + 1 - row_number(Adjusted.P.value)
+            }
         )
+    }
     ggplot(df, aes(generatio, rank)) +
         geom_point(aes(color = Adjusted.P.value, size = Count)) +
         scale_size(range = c(0.5, 12), name = "Gene count") +
         theme_minimal() %>%
-        theme_perso0(1) +
+        theme_perso0(cex) +
         labs(title = title, x = "Gene ratio", y = "") +
-        theme(axis.ticks.y = element_blank()) +
+        theme(
+            axis.ticks.y = element_blank(),
+            axis.text.y = element_text(size = 16 * cex)
+        ) +
         scale_color_gradientn(
-            name = "Adjusted P",
+            # labels = label_pvalue(),
+            # breaks = breaks_width(width = 5, offset = 0),
+            name = "FDR",
             colours = c(get_colors()[1], "gray", get_colors()[2])
         ) +
-        scale_y_continuous(breaks = df$rank, labels = df$label)
+        scale_y_continuous(breaks = df$rank, labels = df$label) +
+        expand_limits(y = max(df$generatio) + max(df$generatio) / ratio) 
 }
 
 #' @export
@@ -244,15 +260,17 @@ add_significance0 <- function(x, p.col = NULL) {
 }
 
 #' @export
-volcano_plot <- function(res, top_genes, title = "", legend = "right", cex = 1.5, xtitle = expression("Effect size (Cohen's d)")) {
+volcano_plot <- function(res, top_genes, title = "", legend = "right", cex = 1.5) {
     # p_lab <- list.mapv(seq(3), f(.) ~ stri_dup("*", .))
-    ps <- sapply(c(0.05, 0.01, 0.001), function(x) -log(x, 10))
+    # ps <- filter(res, padj <= 0.05) %>% pull(log10p) %>% min()
+    ps <- -log(0.05, 10)
+    # ds <- c(min(top_genes$log2fc), max(top_genes$log2fc))
     # ds <- c(-1.2, -0.8, -0.5, 0.5, 0.8, 1.2)
     ggplot(res, aes(log2fc, log10p)) +
         geom_point(aes(color = Expression), size = 3, alpha = 0.5) +
-        # geom_vline(xintercept = ds, colour = "gray", lty = 2, lwd = 1.2) +
+        geom_vline(xintercept = c(-1, 1), colour = "gray", lty = 2, lwd = 1.2) +
         geom_hline(yintercept = ps, colour = "gray", lty = 2, lwd = 1.2) +
-        xlab(xtitle) +
+        xlab(expression("log"[2] * "FC")) +
         ylab(expression("-log"[10] * "P")) +
         scale_color_manual(values = c("dodgerblue3", "gray50", "firebrick3")) +
         guides(colour = guide_legend(override.aes = list(size = 2))) +
@@ -271,14 +289,14 @@ volcano_plot <- function(res, top_genes, title = "", legend = "right", cex = 1.5
 
 # filter(res, Expression != "ns")
 #' @export
-get_top <- function(res, fc_threshold = 0.08, p_threshold = 0.05, n = 1000) {
+get_top <- function(res, fc_threshold = 1, p_threshold = 0.05, n = 1000) {
     bind_rows(
         res %>%
-            filter(log2fc >= fc_threshold & p <= p_threshold),
+            filter(log2fc >= fc_threshold & padj <= p_threshold),
         res %>%
-            filter(log2fc <= -fc_threshold & p <= p_threshold)
+            filter(log2fc <= -fc_threshold & padj <= p_threshold)
     ) %>%
-        arrange(p, desc(abs(log2fc))) %>%
+        arrange(padj, desc(abs(log2fc))) %>%
         head(n)
 }
 
