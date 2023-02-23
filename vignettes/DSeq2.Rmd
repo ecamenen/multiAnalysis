@@ -197,5 +197,93 @@ plotCounts(l_de0[[4]], gene = "HLA-DQA1_4", intgroup = "group", returnData = TRU
     theme(legend.position = "none")
 # use_data(l_de_manif, overwrite = TRUE)
 ```
+
+
+```{r}
+de_genes <- list.map(l_de, f(i) ~ mutate(i, log2fc = log2FoldChange) %>% filter(!is.na(padj)) %>% get_top(0.5, 0.2, n = 200) %>% filter(!str_detect(rownames(.), "Unknown")) %>% rownames() %>%
+    str_remove_all("_\\d") %>%
+    unique())
+sapply(de_genes, length)
+
+# de_genes_ranked <- list.map(l_de, f(i) ~ {filter(i, !is.na(padj)) %>% filter(log2FoldChange >= 0.5 | log2FoldChange <= -0.5) %>% filter(pvalue <= 0.2) %>% filter(!str_detect(rownames(.), "Unknown")) -> tmp; tmp$log2FoldChange %>%
+#     set_names(rownames(tmp) %>% str_remove_all("_\\d*")) %>%
+#     sort(decreasing = TRUE)})
+
+de_genes_ranked <- list.map(l_de, f(i) ~ {
+    mutate(i, ensembl_ids = ensembl_ids, log2fc = log2FoldChange) %>%
+        filter(!is.na(padj)) %>%
+        get_top(0.01, 1) -> tmp
+    tmp$log2FoldChange %>%
+        set_names(pull(tmp, ensembl_ids)) %>%
+        sort(decreasing = TRUE)
+})
+sapply(de_genes_ranked, length)
 ```
 
+
+```{r setup}
+library(multiAnalysis)
+library(enrichR)
+setEnrichrSite("Enrichr")
+# listEnrichrDbs()$libraryName[listEnrichrDbs()$libraryName %>% grepl("orphanet", ., ignore.case = TRUE)]
+dbs <- c("GO_Molecular_Function_2021", "GO_Biological_Process_2021", "Orphanet_Augmented_2021", "WikiPathway_2021_Human", "MSigDB_Hallmark_2020", "Reactome_2022")
+```
+
+```{r}
+for (x in colnames(blocks)) {
+    p <- enrichr(de_genes[[x]], dbs) %>% list.map(f(i, j) ~ plot_enrich(i, n = 15, title = str_replace_all(dbs[j], "_", " ")))
+    plot_grid(
+        plotlist = p,
+        nrow = 2,
+        ncol = 3,
+        align = "hv"
+    ) %>%
+        save_tiff(file.path(path_img, "shrinked", paste0("enrichr_", x, "_skrinked")), 8000, 4000)
+}
+l_enrich <- list.map(de_genes, f(x) ~ enrichr(x, dbs))
+p <- list.map(l_enrich, f(i, j, k) ~ plot_enrich(i[[5]], n = 15, title = str_replace_all(k, "\\.", "-")))
+plot_grid(
+    plotlist = p[c(1, 4)],
+    nrow = 1,
+    ncol = 2,
+    align = "hv"
+)
+```
+
+
+```{r}
+# ClusterProfiler
+library(clusterProfiler)
+organism <- "org.Hs.eg.db"
+library(organism, character.only = TRUE)
+gse <- list.map(de_genes_ranked, f(i) ~ gseGO(i, ont = "BP", OrgDb = get(organism), keyType = "ENSEMBL"))
+# dotplot(gse, showCategory = 10)
+
+p <- list.map(gse, f(i) ~ data.frame(i)) %>%
+    keep(function(i) nrow(i) > 0) %>%
+    list.map(f(i, j, k) ~ data.frame(i) %>% mutate(Adjusted.P.value = p.adjust, Term = str_to_title(Description), Count = setSize, Overlap = core_enrichment) %>% plot_enrich(10, gsea = TRUE, title = k)) %>%
+    # list(pluck(., 1), pluck(., 2), NULL, pluck(., 3), pluck(., 4)) %>%
+    plot_grid(
+        plotlist = .,
+        nrow = 2,
+        ncol = 3,
+        align = "hv"
+    ) %>%
+    save_tiff(file.path(path_img, "gsea_treat2"), 8000, 4000)
+```
+
+
+```{r, eval = FALSE}
+kegg_genes <- list.map(de_genes_ranked, f(i) ~ {
+    bitr(names(i), fromType = "ENSEMBL", toType = c("ENTREZID"), OrgDb = get(organism)) %>% left_join(data.frame(ENSEMBL = names(i), log2FoldChange = i)) -> tmp
+    tmp$log2FoldChange %>%
+        set_names(pull(tmp, ENTREZID)) %>%
+        sort(decreasing = TRUE)
+})
+
+tmp <- list.map(kegg_genes, f(i) ~ gseKEGG(
+    geneList = i,
+    organism = "hsa",
+    keyType = "ncbi-geneid"
+))
+```
