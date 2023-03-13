@@ -1,8 +1,8 @@
-#' @import cluster corrplot cowplot DataExplorer devtools dendextend dplyr
-#' @import factoextra FactoMineR forcats ggalluvial ggExtra ggforce ggplot2
-#' @import ggrepel ggstatsplot golem heatmaply kohonen NbClust pheatmap pipeR
-#' @import pvclust rlist RColorBrewer snakecase scales stringi stringr
-#' @import tidyverse usethis visNetwork
+#' @import biomaRt cluster clusterProfiler corrplot cowplot DataExplorer DESeq2
+#' @import devtools dendextend dplyr enrichR factoextra FactoMineR forcats
+#' @import ggalluvial ggExtra ggforce ggplot2 ggrepel ggstatsplot golem
+#' @import heatmaply kohonen NbClust pheatmap pipeR pvclust rlist RColorBrewer
+#' @import snakecase scales stringi stringr tidyverse usethis visNetwork
 #' @importFrom desc desc_get_deps
 #' @importFrom graphics par text
 #' @importFrom magrittr %>%

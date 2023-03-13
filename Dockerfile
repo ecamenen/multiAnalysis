@@ -16,7 +16,7 @@ RUN apt-get update --allow-releaseinfo-change -qq && \
 RUN apt-get install -y --no-install-recommends libglpk-dev libxt6
 ENV RPKGS ade4 BiocManager corrplot cowplot DataExplorer dendextend devtools dlookr enrichR factoextra FactoMineR ggalluvial ggExtra ggforce ggnewscale ggplot2 ggpubr ggrepel ggridges ggstatsplot ggupset golem heatmaply janitor kableExtra knitr kohonen lintr markdown naniar NbClust org.Hs.eg.db pam pheatmap pipeR  plotly pvclust rlist rmarkdown rstatix styler testthat tidylog tidyverse venn visNetwork
 RUN Rscript -e "install.packages(commandArgs(TRUE))" ${RPKGS}
-RUN Rscript -e 'BiocManager::install(c("BiocCheck", "mixOmics", "clusterProfiler", "pathview", "DESeq2", "tximport", "tximportData"))'
+RUN Rscript -e 'BiocManager::install(c("apeglm", "BiocCheck", "biomaRt", "clusterProfiler", "DESeq2", "mixOmics", "pathview", "sva", "tximport", "tximportData"))'
 RUN R -e "devtools::install_github('ecamenen/"${TOOL_NAME}"', ref = '"${TOOL_VERSION}"')"
 RUN Rscript -e 'devtools::install_github("rgcca-factory/RGCCA", ref = "develop")'
 RUN Rscript -e 'devtools::install_github("moldach/vapoRwave")'

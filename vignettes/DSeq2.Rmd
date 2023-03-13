@@ -16,11 +16,23 @@ knitr::opts_chunk$set(
 
 ```{r}
 library(multiAnalysis)
+library(tximport)
+library(rhdf5)
 # Load matrix for treatment
-set_analysis(block_name = "still_treatment_post", type = "qual")
+set_analysis(block_name = "emna_treat", type = "qual")
 # set_analysis(block_name = "still_manif", type = "qual")
 # Extract variable for discrimination
 batches <- clinic_intersect$batch %>% set_names(row.names(clinic_intersect))
+
+if (!file.exists(file.path(path_img, "shrinked"))) {
+      dir.create(file.path(path_img, "shrinked"))
+  }
+```
+
+```{r setup}
+setEnrichrSite("Enrichr")
+# listEnrichrDbs()$libraryName[listEnrichrDbs()$libraryName %>% grepl("orphanet", ., ignore.case = TRUE)]
+dbs <- c("GO_Molecular_Function_2021", "GO_Biological_Process_2021", "Orphanet_Augmented_2021", "WikiPathway_2021_Human", "MSigDB_Hallmark_2020", "Reactome_2022")
 ```
 
 ```{r}
@@ -51,20 +63,27 @@ col_names <- list.map(l_visits, f(.) ~ {
 })
 
 # Select visit A, rename columns, order by patient ID
-visit_a <- set_colnames(l_visits[["A"]], colnames(l_visits[["A"]]) %>% str_replace_all(paste0("0?(\\d{4})(A|B)05PB1"), "\\1")) %>%
-    select(c("GeneName", as.character(col_names[["A"]])))
-gene_name <- counts_matrix$GeneName
-counts_matrix <- visit_a
+l_visits <- list.map(
+    c("A", "B"),
+    f(i) ~ {
+        set_colnames(l_visits[[i]], colnames(l_visits[[i]]) %>% str_replace_all(paste0("0?(\\d{4})(A|B)05PB1"), "\\1")) %>%
+            select(c("GeneName", as.character(col_names[[i]])))
+    }
+)
+counts_matrix <- l_visits[["A"]]
+gene_name <- str_remove_all(counts_matrix$GeneName, "\\.*")
 # Filter by common rows
 common_rows <- Reduce(intersect, list(colnames(counts_matrix), rownames(blocks), names(batches)))
 counts_matrix <- select(counts_matrix, common_rows)
 
 blocks <- data.frame(blocks)[common_rows, ] %>% select(contains(c("Mucocutaneous", "Musculoskeletal", "Urticaria", "Myocarditis", "Corticosteroid", "DMARDs", "Anti.IL1", "Anti.IL6")))
 batches <- batches[common_rows]
+
+# c(list.map(l_visits, f(i) ~ colnames(i)[-1]), CLINIC = list(rownames(blocks)))
+# plot_venn1(temp, color = c("#FED976", "#FD8D3C", "#377EB8"))
 ```
 
 ```{r}
-library(biomaRt)
 # db_annot <- useEnsembl(biomart = "genes", dataset = "hsapiens_gene_ensembl", version = 104)
 # datasets <- listDatasets(db_annot)
 # filter(datasets, str_detect(description, "Human")) %>% pull(version)
@@ -221,14 +240,6 @@ sapply(de_genes_ranked, length)
 ```
 
 
-```{r setup}
-library(multiAnalysis)
-library(enrichR)
-setEnrichrSite("Enrichr")
-# listEnrichrDbs()$libraryName[listEnrichrDbs()$libraryName %>% grepl("orphanet", ., ignore.case = TRUE)]
-dbs <- c("GO_Molecular_Function_2021", "GO_Biological_Process_2021", "Orphanet_Augmented_2021", "WikiPathway_2021_Human", "MSigDB_Hallmark_2020", "Reactome_2022")
-```
-
 ```{r}
 for (x in colnames(blocks)) {
     p <- enrichr(de_genes[[x]], dbs) %>% list.map(f(i, j) ~ plot_enrich(i, n = 15, title = str_replace_all(dbs[j], "_", " ")))
@@ -253,7 +264,6 @@ plot_grid(
 
 ```{r}
 # ClusterProfiler
-library(clusterProfiler)
 organism <- "org.Hs.eg.db"
 library(organism, character.only = TRUE)
 gse <- list.map(de_genes_ranked, f(i) ~ gseGO(i, ont = "BP", OrgDb = get(organism), keyType = "ENSEMBL"))

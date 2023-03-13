@@ -15,14 +15,18 @@ Depends:
     R (>= 3.5.0)
 Imports:
     ade4,
+    biomaRt,
     cluster,
+    clusterProfiler,
     corrplot,
     cowplot,
     DataExplorer,
     desc,
+    DESeq2,
     dendextend,
     devtools,
     dplyr,
+    enrichR,
     factoextra,
     FactoMineR,
     forcats,
