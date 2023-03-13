@@ -253,9 +253,16 @@ list.map(l_de, f(i, k, j) ~ i %>% mutate(log2fc = log2FoldChange, p = pvalue, lo
 
 
 ```{r, eval = FALSE}
-list.map(l_de, f(i) ~ filter(i, !is.na(padj)) %>% filter(log2FoldChange >= 1 | log2FoldChange <= -1) %>% filter(padj <= 0.05) %>% arrange(padj))
+list.map(l_de, f(i) ~ filter(i, !is.na(padj)) %>%
+    filter(log2FoldChange >= 1 | log2FoldChange <= -1) %>%
+    filter(padj <= 0.05) %>%
+    arrange(padj))
 
-de_gene_names <- list.map(l_de, f(i) ~ mutate(i, log2fc = log2FoldChange) %>% filter(!is.na(padj)) %>% filter(!str_detect(rownames(.), "unknown")) %>% get_top(0.5, 1) %>% rownames() %>%
+de_gene_names <- list.map(l_de, f(i) ~ mutate(i, log2fc = log2FoldChange) %>%
+    filter(!is.na(padj)) %>%
+    filter(!str_detect(rownames(.), "unknown")) %>%
+    get_top(0.5, 1) %>%
+    rownames() %>%
     str_remove_all("_\\d") %>%
     unique() %>%
     toupper())
@@ -299,7 +306,11 @@ plotCounts(l_de0[[4]], gene = "HLA-DQA1_4", intgroup = "group", returnData = TRU
 
 
 ```{r}
-de_genes <- list.map(l_de, f(i) ~ mutate(i, log2fc = log2FoldChange) %>% filter(!is.na(padj)) %>% get_top(0.5, 0.2, n = 200) %>% filter(!str_detect(rownames(.), "Unknown")) %>% rownames() %>%
+de_genes <- list.map(l_de, f(i) ~ mutate(i, log2fc = log2FoldChange) %>%
+    filter(!is.na(padj)) %>%
+    get_top(0.5, 0.2, n = 200) %>%
+    filter(!str_detect(rownames(.), "Unknown")) %>%
+    rownames() %>%
     str_remove_all("_\\d") %>%
     unique())
 sapply(de_genes, length)
@@ -351,7 +362,9 @@ gse <- list.map(de_genes_ranked, f(i) ~ gseGO(i, ont = "BP", OrgDb = get(organis
 
 p <- list.map(gse, f(i) ~ data.frame(i)) %>%
     keep(function(i) nrow(i) > 0) %>%
-    list.map(f(i, j, k) ~ data.frame(i) %>% mutate(Adjusted.P.value = p.adjust, Term = str_to_title(Description), Count = setSize, Overlap = core_enrichment) %>% plot_enrich(10, gsea = TRUE, title = k)) %>%
+    list.map(f(i, j, k) ~ data.frame(i) %>%
+        mutate(Adjusted.P.value = p.adjust, Term = str_to_title(Description), Count = setSize, Overlap = core_enrichment) %>%
+        plot_enrich(10, gsea = TRUE, title = k)) %>%
     # list(pluck(., 1), pluck(., 2), NULL, pluck(., 3), pluck(., 4)) %>%
     plot_grid(
         plotlist = .,
