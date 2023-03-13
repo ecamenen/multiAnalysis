@@ -42,7 +42,66 @@ processed_matrix <- read_tsv(file = file.path(path, "processed_gene_matrix.tsv")
 counts_matrix <- read_delim(file = file.path(path, "raw_gene_matrix.txt"), delim = " ", skip = 1, col_names = colnames(processed_matrix))
 ```
 
+```{r, eval = FALSE}
+transcript_counts <- list.map(
+    seq(3),
+    f(i) ~ {
+        list.map(
+            list.files(
+                path = file.path(path, "RNASeq", "transcript_counts", paste0("Batch", i)),
+                full.names = TRUE,
+                pattern = "tsv"
+            ),
+            f(i) ~ {
+                read_tsv(i) %>%
+                    select(target_id, est_counts) %>%
+                    set_colnames(c("id", str_extract(i, "\\d{5}[AB]05PB1")))
+            }
+        ) %>% Reduce(function(x, y) full_join(x, y, by = "id"), .)
+    }
+) %>% Reduce(function(x, y) full_join(x, y, by = "id"), .)
+# use_data(transcript_counts, overwrite = TRUE)
+```
+```{r, eval = FALSE}
+kallisto_files0 <- list.map(
+    c("First", "Second", "Third"),
+    f(i) ~ {
+        list.map(
+            list.files(
+                path = file.path(path, "kallisto", paste0(i, "Batch_h5files")),
+                full.names = TRUE,
+                pattern = "h5"
+            ), f(i) ~ {
+                tmp <- H5Fopen(i)
+                # h5closeAll()
+                data.frame(tmp$est_counts) %>% set_colnames(c(str_extract(i, "\\d{5}[AB]05PB1")))
+            }
+        ) %>% Reduce(cbind, .)
+    }
+) %>% Reduce(cbind, .)
+```
+
+```{r, eval = FALSE}
+tr_files <- list.map(
+    seq(3),
+    f(i) ~ {
+        list.files(
+            path = file.path(path, "RNASeq", "transcript_counts", paste0("Batch", i)),
+            full.names = TRUE,
+            pattern = "tsv"
+        )
+    }
+) %>% unlist()
+tr_names <- read_tsv(tr_files[1])$target_id %>% str_remove_all("\\.*")
+gene_query <- getBM(
+    attributes = c("ensembl_transcript_id", "hgnc_symbol"),
+    mart = db_annot
+)
+tximport(., ignoreTxVersion = TRUE, type = "kallisto", txOut = TRUE, tx2gene = tx2gene, ignoreAfterBar = TRUE)
+```
+
 ```{r}
+# counts_matrix <- transcript_counts
 # Split the visits
 l_visits <- list.map(
     c("A", "B"),
@@ -123,7 +182,28 @@ counts_matrix <- select(counts_matrix, -c(hgnc_symbol)) %>%
 ```
 
 ```{r, eval = FALSE}
-library(sva)
+gene_counts <- list.map(
+    seq(3),
+    f(i) ~ {
+        list.map(
+            list.files(
+                path = file.path(path, "RNASeq", "gene_counts", paste0("Batch", i)),
+                full.names = TRUE,
+                pattern = "tsv"
+            ),
+            f(i) ~ {
+                read_tsv(i, col_names = FALSE) %>%
+                    select(X1, X2) %>%
+                    set_colnames(c("id", str_extract(i, "\\d{5}[AB]05PB1")))
+            }
+        ) %>% Reduce(function(x, y) full_join(x, y, by = "id"), .)
+    }
+) %>% Reduce(function(x, y) full_join(x, y, by = "id"), .)
+# use_data(gene_counts, overwrite = TRUE)
+```
+
+```{r, eval = FALSE}
+# library(sva)
 counts_combat <- as.matrix(counts_matrix) %>%
     set_rownames(gene_name) %>%
     ComBat_seq(batches) %>%
