@@ -62,6 +62,7 @@ transcript_counts <- list.map(
 ) %>% Reduce(function(x, y) full_join(x, y, by = "id"), .)
 # use_data(transcript_counts, overwrite = TRUE)
 ```
+
 ```{r, eval = FALSE}
 kallisto_files0 <- list.map(
     c("First", "Second", "Third"),
@@ -142,41 +143,42 @@ batches <- batches[common_rows]
 # plot_venn1(temp, color = c("#FED976", "#FD8D3C", "#377EB8"))
 ```
 
-```{r}
-# db_annot <- useEnsembl(biomart = "genes", dataset = "hsapiens_gene_ensembl", version = 104)
+```{r, eval = FALSE}
+db_annot <- useEnsembl(biomart = "genes", dataset = "hsapiens_gene_ensembl", version = 104)
 # datasets <- listDatasets(db_annot)
 # filter(datasets, str_detect(description, "Human")) %>% pull(version)
 
-# gene_query <- getBM(
-#     attributes = c("ensembl_gene_id", "hgnc_symbol"),
-#         filters = "ensembl_gene_id",
-#         values = gene_name,
-#         mart = db_annot
-#     )
+gene_query <- getBM(
+    attributes = c("ensembl_gene_id", "hgnc_symbol"),
+    filters = c("ensembl_gene_id", "transcript_biotype", "chromosome_name"),
+    values = list(gene_name, "protein_coding", seq(22)),
+    mart = db_annot
+)
 
-gene_query <- read_tsv(file = file.path(path, "martquery.tsv")) %>% set_colnames(c("ensembl_gene_id", "hgnc_symbol"))
+# gene_query <- read_tsv(file = file.path(path, "martquery.tsv")) %>% set_colnames(c("ensembl_gene_id", "hgnc_symbol"))
 # which(is.na(gene_query$`Gene name`)) %>% length()
 gene_query[duplicated(gene_query$ensembl_gene_id) %>% which(), ] %>%
     pull(ensembl_gene_id) %>%
     paste0("^", ., "$") %>%
     list.map(., f(i) ~ filter(gene_query, str_detect(ensembl_gene_id, i)))
 
-# duplicates <- gene_query[duplicated(gene_query$ensembl_gene_id) %>% which(), 1]
-# gene_query <- gene_query[!gene_query$ensembl_gene_id %in% duplicates, ] %>% rbind(data.frame(ensembl_gene_id = c("ENSG00000277796", "ENSG00000277768", "ENSG00000277336", "ENSG00000276085", "ENSG00000230417"), hgnc_symbol = c(rep("CCL3L1/3", 4), "LINC00595/LINC00856")))
+duplicates <- gene_query[duplicated(gene_query$ensembl_gene_id) %>% which(), 1]
+gene_query <- gene_query[!gene_query$ensembl_gene_id %in% duplicates, ] %>% rbind(data.frame(ensembl_gene_id = c("ENSG00000276085"), hgnc_symbol = c("CCL3L1/3")))
+use_data(gene_query, overwrite = TRUE)
+```
 
+```{r}
+data(gene_query)
 counts_matrix <- mutate(counts_matrix, ensembl_gene_id = gene_name) %>%
     left_join(gene_query) %>%
     arrange(hgnc_symbol) %>%
     # select(-ensembl_gene_id) %>%
-    mutate(hgnc_symbol = str_replace_all(hgnc_symbol, "^$", "Unkown"))
-counts_matrix[is.na(counts_matrix)] <- "Unknown"
-counts_matrix <- data.frame(counts_matrix) %>%
-    arrange(hgnc_symbol)
+    data.frame() %>%
+    filter(!str_detect(hgnc_symbol, "^$"))
 gene_hgnc <- pull(counts_matrix, hgnc_symbol) %>%
     snakecase::to_any_case(case = "none", sep_in = NULL, unique_sep = "_")
-ensembl_ids <- pull(counts_matrix, ensembl_gene_id)
 counts_matrix <- select(counts_matrix, -c(hgnc_symbol)) %>%
-    set_colnames(colnames(counts_matrix)[-c(38)] %>% str_remove_all("^X")) %>%
+    set_colnames(colnames(counts_matrix)[-c(ncol(counts_matrix))] %>% str_remove_all("^X")) %>%
     set_rownames(gene_hgnc)
 # use_data(counts_matrix, overwrite = TRUE)
 ```
@@ -216,7 +218,6 @@ counts_combat_HUGO <- ensembl_to_hugo(ensembl_hgnc, counts_combat)
 # setB <- select(counts_matrix, which(groups == 1) %>% names())
 # comparison <- cbind(setA, setB)
 # exprs_threshold <- 1 * NCOL(counts_matrix)
-library(DESeq2)
 filtered_counts <- counts_matrix[apply(select(counts_matrix, -ensembl_gene_id), 1, sum) > 10, ]
 ensembl_ids <- pull(filtered_counts, ensembl_gene_id)
 filtered_counts <- select(filtered_counts, -ensembl_gene_id) %>% round()
@@ -249,8 +250,6 @@ list.map(l_de, f(i, k, j) ~ i %>% mutate(log2fc = log2FoldChange, p = pvalue, lo
     ) %>%
     save_tiff(file.path(path_img, "volcano_treat_b"), 8000, 4000)
 ```
-
-
 
 ```{r, eval = FALSE}
 list.map(l_de, f(i) ~ filter(i, !is.na(padj)) %>%
@@ -304,12 +303,10 @@ plotCounts(l_de0[[4]], gene = "HLA-DQA1_4", intgroup = "group", returnData = TRU
 # use_data(l_de_manif, overwrite = TRUE)
 ```
 
-
 ```{r}
 de_genes <- list.map(l_de, f(i) ~ mutate(i, log2fc = log2FoldChange) %>%
     filter(!is.na(padj)) %>%
-    get_top(0.5, 0.2, n = 200) %>%
-    filter(!str_detect(rownames(.), "Unknown")) %>%
+    get_top(0.5, 0.05, n = 200) %>%
     rownames() %>%
     str_remove_all("_\\d") %>%
     unique())
@@ -329,7 +326,6 @@ de_genes_ranked <- list.map(l_de, f(i) ~ {
 })
 sapply(de_genes_ranked, length)
 ```
-
 
 ```{r}
 for (x in colnames(blocks)) {
@@ -374,7 +370,6 @@ p <- list.map(gse, f(i) ~ data.frame(i)) %>%
     ) %>%
     save_tiff(file.path(path_img, "gsea_treat2"), 8000, 4000)
 ```
-
 
 ```{r, eval = FALSE}
 kegg_genes <- list.map(de_genes_ranked, f(i) ~ {
