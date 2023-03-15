@@ -201,13 +201,14 @@ plot_enrich <- function(x, n = 20, title = NULL, gsea = FALSE, cex = 1, ratio = 
         head(n) %>%
         mutate(
             label = {
-                str_trunc(Term, 50) %>%
-                    str_remove_all("\\(.*") %>%
-                    str_remove_all("((ORPHA)|(WP)|(HSA)|(R-)).*")
+                str_remove_all(Term, "\\(.*") %>%
+                    str_remove_all("((ORPHA)|(WP)|(HSA)|(R-)).*") %>%
+                    str_trunc(50) -> temp
+                paste0(toupper(substr(temp, 1, 1)), substr(temp, 2, nchar(temp)))
             },
             rank = n + 1 - row_number(Adjusted.P.value)
         )
-    if(gsea) {
+    if (gsea) {
         df <- mutate(
             df,
             generatio = str_split(Overlap, "/") %>% sapply(length)
@@ -226,11 +227,14 @@ plot_enrich <- function(x, n = 20, title = NULL, gsea = FALSE, cex = 1, ratio = 
         geom_point(aes(color = Adjusted.P.value, size = Count)) +
         scale_size(range = c(0.5, 12), name = "Gene count") +
         theme_minimal() %>%
-        theme_perso0(cex) +
+        theme_perso0(cex * 1.2) +
         labs(title = title, x = "Gene ratio", y = "") +
         theme(
             axis.ticks.y = element_blank(),
-            axis.text.y = element_text(size = 16 * cex)
+            axis.text.y = element_text(
+                size = 16 * cex,
+                colour = ifelse(df$Adjusted.P.value <= 0.05, get_colors()[1], "gray")
+            )
         ) +
         scale_color_gradientn(
             # labels = label_pvalue(),
@@ -239,7 +243,7 @@ plot_enrich <- function(x, n = 20, title = NULL, gsea = FALSE, cex = 1, ratio = 
             colours = c(get_colors()[1], "gray", get_colors()[2])
         ) +
         scale_y_continuous(breaks = df$rank, labels = df$label) +
-        expand_limits(y = max(df$generatio) + max(df$generatio) / ratio) 
+        expand_limits(y = max(df$generatio) + max(df$generatio) / ratio)
 }
 
 #' @export
@@ -266,9 +270,14 @@ volcano_plot <- function(res, top_genes, title = "", legend = "right", cex = 1.5
     ps <- -log(0.05, 10)
     # ds <- c(min(top_genes$log2fc), max(top_genes$log2fc))
     # ds <- c(-1.2, -0.8, -0.5, 0.5, 0.8, 1.2)
+    top_genes <- data.frame(t(c(rep(NA, 5), -100, NA, -1, ""))) %>%
+        mutate_all(as.numeric) %>%
+        data.frame(c("Up-regulated", "Down-regulated")) %>%
+        set_colnames(colnames(top_genes)) %>%
+        rbind(top_genes)
     ggplot(res, aes(log2fc, log10p)) +
         geom_point(aes(color = Expression), size = 3, alpha = 0.5) +
-        geom_vline(xintercept = c(-1, 1), colour = "gray", lty = 2, lwd = 1.2) +
+        geom_vline(xintercept = c(-0.5, 0.5), colour = "gray", lty = 2, lwd = 1.2) +
         geom_hline(yintercept = ps, colour = "gray", lty = 2, lwd = 1.2) +
         xlab(expression("log"[2] * "FC")) +
         ylab(expression("-log"[10] * "P")) +
@@ -276,10 +285,11 @@ volcano_plot <- function(res, top_genes, title = "", legend = "right", cex = 1.5
         guides(colour = guide_legend(override.aes = list(size = 2))) +
         geom_text_repel(
             data = top_genes,
-            mapping = aes(log2fc, log10p, label = name),
+            mapping = aes(log2fc, log10p, label = name, color = Expression),
             size = cex * 3
         ) +
         scale_x_continuous(limits = max(abs(res$log2fc)) * c(-1, 1)) +
+        scale_y_continuous(limits = c(0, max(abs(res$log10p)))) +
         # scale_y_continuous(breaks = ps, labels = p_lab) +
         ggtitle(label = title) +
         theme_classic() %>%

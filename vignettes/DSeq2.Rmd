@@ -136,7 +136,7 @@ gene_name <- str_remove_all(counts_matrix$GeneName, "\\.*")
 common_rows <- Reduce(intersect, list(colnames(counts_matrix), rownames(blocks), names(batches)))
 counts_matrix <- select(counts_matrix, common_rows)
 
-blocks <- data.frame(blocks)[common_rows, ] %>% select(contains(c("Mucocutaneous", "Musculoskeletal", "Urticaria", "Myocarditis", "Corticosteroid", "DMARDs", "Anti.IL1", "Anti.IL6")))
+blocks <- data.frame(blocks)[common_rows, ] %>% select(contains(c("Mucocutaneous", "Musculoskeletal", "Urticaria", "Myocarditis", "Anti.IL1", "Anti.IL6", "Corticosteroid", "DMARDs", "Kinase.Inhibitor", "Naive")))
 batches <- batches[common_rows]
 
 # c(list.map(l_visits, f(i) ~ colnames(i)[-1]), CLINIC = list(rownames(blocks)))
@@ -234,21 +234,26 @@ l_de <- list.map(l_de0, f(i) ~ lfcShrink(i, coef = "group_1_vs_0") %>%
 ```
 
 ```{r}
-list.map(l_de, f(i, k, j) ~ i %>% mutate(log2fc = log2FoldChange, p = pvalue, log10p = -log(padj, 10), name = rownames(.) %>% str_remove_all("_\\d*") %>% toupper(), Expression = case_when(
-    log2FoldChange >= 1 & padj <= 0.05 ~ "Up-regulated",
-    log2FoldChange <= -1 & padj <= 0.05 ~ "Down-regulated",
-    TRUE ~ "ns"
-)) %>% filter(log2FoldChange >= 0.01 | log2FoldChange <= -0.01) %>%
-    volcano_plot(get_top(., n = 30), cex = 3, title = str_replace(j, "\\.", "-"), xtitle = expression("log"[2] * "FC"), legend = "none") + xlab("") + ylab("")) %>%
-    list(pluck(., 1), pluck(., 2), NULL, pluck(., 3), pluck(., 4)) %>%
-    # list(pluck(., 1), NULL, NULL, pluck(., 2)) %>%
-    plot_grid(
-        plotlist = .,
-        nrow = 2,
-        ncol = 3,
-        align = "hv"
-    ) %>%
-    save_tiff(file.path(path_img, "volcano_treat_b"), 8000, 4000)
+l_de2 <- list.map(l_de, f(i) ~ i %>%
+    mutate(log2fc = log2FoldChange, p = pvalue, log10p = -log(padj, 10), name = rownames(.) %>% str_remove_all("_\\d*") %>% toupper(), Expression = case_when(
+        log2FoldChange >= 0.5 & padj <= 0.05 ~ "Up-regulated",
+        log2FoldChange <= -0.5 & padj <= 0.05 ~ "Down-regulated",
+        TRUE ~ "ns"
+    )) %>%
+    filter(log2FoldChange >= 0.01 | log2FoldChange <= -0.01)
+)
+    
+list.map(l_de2, f(i, k, j) ~ i %>%
+    volcano_plot(get_top(., fc_threshold = 0.5, n = 10), cex = 3, title = str_replace(j, "\\.", "-"), legend = "none") + xlab("") + ylab("")) -> p
+# list(pluck(., 1), pluck(., 2), NULL, pluck(., 3), pluck(., 4)) %>%
+# list(pluck(., 1), NULL, NULL, pluck(., 2)) %>%
+plot_grid(
+    plotlist = p,
+    nrow = 2,
+    ncol = 3,
+    align = "hv"
+) %>%
+    save_tiff(file.path(path_img, "volcano_treat"), 8000, 4000)
 ```
 
 ```{r, eval = FALSE}
@@ -310,7 +315,7 @@ de_genes <- list.map(l_de, f(i) ~ mutate(i, log2fc = log2FoldChange) %>%
     rownames() %>%
     str_remove_all("_\\d") %>%
     unique())
-sapply(de_genes, length)
+cbind(apply(blocks, 2, sum) %>% as.data.frame() %>% set_colnames(c("N. patients")), sapply(de_genes, length) %>% as.data.frame() %>% set_colnames(c("N. significant genes"))) %>% kable0()
 
 # de_genes_ranked <- list.map(l_de, f(i) ~ {filter(i, !is.na(padj)) %>% filter(log2FoldChange >= 0.5 | log2FoldChange <= -0.5) %>% filter(pvalue <= 0.2) %>% filter(!str_detect(rownames(.), "Unknown")) -> tmp; tmp$log2FoldChange %>%
 #     set_names(rownames(tmp) %>% str_remove_all("_\\d*")) %>%
@@ -328,24 +333,36 @@ sapply(de_genes_ranked, length)
 ```
 
 ```{r}
-for (x in colnames(blocks)) {
-    p <- enrichr(de_genes[[x]], dbs) %>% list.map(f(i, j) ~ plot_enrich(i, n = 15, title = str_replace_all(dbs[j], "_", " ")))
-    plot_grid(
-        plotlist = p,
-        nrow = 2,
-        ncol = 3,
-        align = "hv"
-    ) %>%
-        save_tiff(file.path(path_img, "shrinked", paste0("enrichr_", x, "_skrinked")), 8000, 4000)
-}
-l_enrich <- list.map(de_genes, f(x) ~ enrichr(x, dbs))
-p <- list.map(l_enrich, f(i, j, k) ~ plot_enrich(i[[5]], n = 15, title = str_replace_all(k, "\\.", "-")))
-plot_grid(
-    plotlist = p[c(1, 4)],
-    nrow = 1,
-    ncol = 2,
-    align = "hv"
-)
+enriched <- list.map(compact(de_genes), f(i) ~ enrichr(i, dbs))
+
+list.map(enriched, f(x, y, z) ~ {
+    keep(x, function(a) nrow(a) > 0) %>%
+        list.map(f(i, j) ~ {
+            plot_enrich(i, n = 15, title = str_replace_all(dbs[j], "_", " "))
+        }) %>%
+        plot_grid(
+            plotlist = .,
+            nrow = 2,
+            ncol = 3,
+            align = "hv"
+        ) %>%
+        save_tiff(file.path(path_img, "shrinked", paste0("enrichr_", z, "_skrinked")), 8000, 4000)
+})
+
+# l_enrich <- list.map(de_genes, f(x) ~ enrichr(x, dbs))
+# p <- list.map(l_enrich, f(i, j, k) ~ plot_enrich(i[[5]], n = 15, title = str_replace_all(k, "\\.", "-")))
+# plot_grid(
+#     plotlist = p[c(1, 4)],
+#     nrow = 1,
+#     ncol = 2,
+#     align = "hv"
+# )
+list.map(enriched, f(i) ~ list.map(i, f(j) ~ filter(j, Adjusted.P.value <= 0.05) %>%
+    select(c(1, 4)) %>%
+    head(15)) %>% keep(function(x) nrow(x) > 0)) %>% compact() -> tmp0
+
+list.map(dbs, f(j) ~ list.filter(tmp0, f(i) ~ !is.null(i[[j]])) %>% list.names())
+# list.map(c(1, 3), f(i) ~ tmp[[2]][[i]] %>% plot_enrich(n = 15, cex = 0.85, title = str_replace_all(dbs[i], "_", " ")))
 ```
 
 
