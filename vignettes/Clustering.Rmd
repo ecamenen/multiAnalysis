@@ -20,7 +20,7 @@ library(multiAnalysis)
 set.seed(123)
 set_analysis(block_name = "clinic_still_processed", to_remove = c("1007", "1014"))
 hc_method <- "ward.D2"
-hc_metric <- "pearson"
+hc_metric <- "spearman"
 hc_index <- "silhouette"
 k <- 2
 n_boot <- 1000
@@ -234,7 +234,8 @@ pheatmap(
     cluster_rows = row_dend0,
     cluster_cols = col_dend0,
     cutree_rows = k,
-    cutree_cols = k
+    cutree_cols = k,
+    fontsize = 12
 )
 
 heatmap(
@@ -257,7 +258,8 @@ heatmap(
 # plotGapPerPart(gaps, MAX_CLUSTERS)
 plotFusionLevels(MAX_CLUSTERS, row_dend0)
 cls <- getClusterPerPart(MAX_CLUSTERS, row_dend0)
-get_summary(res_dist, cls, MAX_CLUSTERS, row_dend0, k = k)
+get_summary(res_dist, cls, MAX_CLUSTERS, row_dend0, k = k) %>% round(2) %>% kable0()
+plot_silhouette0(res_dist, cls, k, colors_k = get_colors()[seq(k)])
 
 # Variable contribution
 100 * getCtrVar(k, cls[[k - 1]], res_scaled)
