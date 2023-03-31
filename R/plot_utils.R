@@ -195,6 +195,24 @@ plot_alluvial <- function(df, col_stratum = NULL, col_alluvium = NULL, label_str
         theme_perso0(1.5, show_axis = FALSE)
 }
 
+get_gene_term <- function(x) {
+    sink(file="/dev/null")
+    tmp <- enrichr(x, dbs)[-3] 
+    sink()
+    tmp %>%
+        list.map(
+            f(i) ~ {
+                pull(i, Term) %>% 
+                    str_remove_all("\\(.*") %>%
+                    str_remove_all("((ORPHA)|(WP)|(HSA)|(R-)).*") %>%
+                    str_trunc(50) %>%
+                    str_trim() -> temp
+                paste0(toupper(substr(temp, 1, 1)), substr(temp, 2, nchar(temp)))
+                }
+            ) %>%
+        compact()
+}
+
 #' @export
 plot_enrich <- function(x, n = 20, title = NULL, gsea = FALSE, cex = 1, ratio = 5) {
     df <- arrange(x, Adjusted.P.value) %>%
@@ -310,6 +328,20 @@ get_top <- function(res, fc_threshold = 1, p_threshold = 0.05, n = 1000) {
         head(n)
 }
 
+get_top0 <- function(res, fc_threshold = 0.5, p_threshold = 0.05, n = 1000, rank = FALSE) {
+    temp <- res %>% 
+    mutate(
+        rank_p = rank(desc(log10p)),
+        rank_fc = rank(desc(abs(log2FoldChange)))
+    ) %>%
+    mutate(rank = rank(rank_p + rank_fc)) %>% 
+    arrange(rank) %>% 
+    filter(abs(log2FoldChange) >= fc_threshold & padj <= p_threshold) %>%
+    head(n)
+    if (!rank) 
+       temp <- dplyr::select(temp, -c(rank, rank_p, rank_fc))
+    return(temp)
+}
 
 #' @export
 differential_analysis <- function(x, fc_threshold = 0.8, p_threshold = 0.01) {
