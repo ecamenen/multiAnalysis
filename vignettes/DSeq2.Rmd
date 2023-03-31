@@ -136,6 +136,7 @@ l_visits <- list.map(
             select(c("GeneName", as.character(col_names[[i]])))
     }
 )
+# list.map(c("A", "B"), f(i) ~ l_visits[[i]] %>% select(intersect(colnames(.), rownames(blocks))) %>% ncol() %>% rep(i, .)) %>% unlist() %>% unname() %>% plot_piechart(cex = 30, hsize = 1.5, title = "", label = FALSE, colour = brewer.pal(9, "Paired")[7:8])
 counts_matrix <- l_visits[["A"]]
 gene_name <- str_remove_all(counts_matrix$GeneName, "\\.*")
 # Filter by common rows
@@ -357,10 +358,9 @@ de_genes1 <- list.map(l_de2, f(i) ~ {
     })
   }
 )
-}
-  )
-cbind(sapply(blocks, function(i) paste0(which(i == 0) %>% length(), "/", sum(i))) %>% as.data.frame() %>% set_colnames(c("N. patients")), sapply(de_genes1, function(x) paste(sapply(x, length), collapse = "/")) %>% as.data.frame() %>% set_colnames(c("N. significant genes (Up-/Down-regulated)"))) %>% kable0() %>% kable_styling(bootstrap_options = c("striped", "condensed"))
-# %>% slice(c(seq(2), 4)) 
+
+sapply(de_genes, function(x) paste(sapply(x, length), sep = "/"))
+
 cbind(sapply(blocks, function(i) paste0(which(i == 0) %>% length(), "/", sum(i))) %>% as.data.frame() %>% set_colnames(c("N. patients")), sapply(de_genes1, function(x) paste(sapply(x, length), collapse = "/")) %>% as.data.frame() %>% set_colnames(c("N. significant genes (Up-/Down-regulated)"))) %>%
     kable0() %>%
     kable_styling(bootstrap_options = c("striped", "condensed"))
@@ -391,6 +391,14 @@ enriched <- list.map(compact(de_genes), f(i) ~ {
             enrichr(dbs)
     }
 }) %>% compact()
+enriched0 <- list.map(compact(de_genes), f(i) ~ {
+    x <- i[[2]]
+    if (length(x) > 0) {
+        unlist(x) %>%
+            head(250) %>%
+            enrichr(dbs)
+    }
+}) %>% compact()
 list.map(enriched, f(x, y, z) ~ {
     keep(x, function(a) nrow(a) > 0) %>%
         list.map(f(i, j) ~ {
@@ -405,6 +413,19 @@ list.map(enriched, f(x, y, z) ~ {
         save_tiff(file.path(path_img, "shrinked", paste0("enrichr_", z, "_skrinked")), 8000, 4000)
 })
 
+# x <- 3
+# enriched0[[x]] %>%
+#     list.map(f(i, j) ~ {
+#         plot_enrich(i, n = 15, title = str_replace_all(dbs[j], "_", " "))
+#     }) %>%
+#     plot_grid(
+#         plotlist = .,
+#         nrow = 2,
+#         ncol = 3,
+#         align = "hv"
+#     ) %>%
+#     save_tiff(file.path(path_img, "shrinked", paste0("enrichr_", names(enriched)[x], "_down3")), 8000, 4000)
+
 # l_enrich <- list.map(de_genes, f(x) ~ enrichr(x, dbs))
 # p <- list.map(l_enrich, f(i, j, k) ~ plot_enrich(i[[5]], n = 15, title = str_replace_all(k, "\\.", "-")))
 # plot_grid(
@@ -414,8 +435,11 @@ list.map(enriched, f(x, y, z) ~ {
 #     align = "hv"
 # )
 list.map(enriched, f(i) ~ list.map(i, f(j) ~ filter(j, Adjusted.P.value <= 0.05) %>%
-    select(c(1, 4)) %>%
+    dplyr::select(c(1, 4, 9)) %>%
     head(15)) %>% keep(function(x) nrow(x) > 0)) %>% compact() -> tmp0
+list.map(enriched0, f(i) ~ list.map(i, f(j) ~ filter(j, Adjusted.P.value <= 0.05) %>%
+    dplyr::select(c(1, 4, 9)) %>%
+    head(15)) %>% keep(function(x) nrow(x) > 0)) %>% compact() -> tmp1
 
 list.map(dbs, f(j) ~ list.filter(tmp0, f(i) ~ !is.null(i[[j]])) %>% list.names())
 # list.map(c(1, 3), f(i) ~ tmp[[2]][[i]] %>% plot_enrich(n = 15, cex = 0.85, title = str_replace_all(dbs[i], "_", " ")))
@@ -494,6 +518,7 @@ p <- list.map(gse, f(i) ~ data.frame(i)) %>%
 
 # Kegg pathways
 ```{r, eval = FALSE}
+c("CD3D", "CD3E", "CD3G", "CD8A", "LCK") %>% bitr(fromType = "ALIAS", toType = c("ENTREZID"), OrgDb = get(organism)) -> tmp
 kegg_genes <- list.map(de_genes_ranked, f(i) ~ {
     bitr(names(i), fromType = "ENSEMBL", toType = c("ENTREZID"), OrgDb = get(organism)) %>% left_join(data.frame(ENSEMBL = names(i), log2FoldChange = i)) -> tmp
     tmp$log2FoldChange %>%
