@@ -196,20 +196,20 @@ plot_alluvial <- function(df, col_stratum = NULL, col_alluvium = NULL, label_str
 }
 
 get_gene_term <- function(x) {
-    sink(file="/dev/null")
-    tmp <- enrichr(x, dbs)[-3] 
+    sink(file = "/dev/null")
+    tmp <- enrichr(x, dbs)[-3]
     sink()
     tmp %>%
         list.map(
             f(i) ~ {
-                pull(i, Term) %>% 
+                pull(i, Term) %>%
                     str_remove_all("\\(.*") %>%
                     str_remove_all("((ORPHA)|(WP)|(HSA)|(R-)).*") %>%
                     str_trunc(50) %>%
                     str_trim() -> temp
                 paste0(toupper(substr(temp, 1, 1)), substr(temp, 2, nchar(temp)))
-                }
-            ) %>%
+            }
+        ) %>%
         compact()
 }
 
@@ -282,30 +282,25 @@ add_significance0 <- function(x, p.col = NULL) {
 }
 
 #' @export
-volcano_plot <- function(res, top_genes, title = "", legend = "right", cex = 1.5) {
+volcano_plot <- function(res, top_genes = NULL, title = "", legend = "right", cex = 1.5) {
     # p_lab <- list.mapv(seq(3), f(.) ~ stri_dup("*", .))
     # ps <- filter(res, padj <= 0.05) %>% pull(log10p) %>% min()
     ps <- -log(0.05, 10)
     # ds <- c(min(top_genes$log2fc), max(top_genes$log2fc))
     # ds <- c(-1.2, -0.8, -0.5, 0.5, 0.8, 1.2)
-    top_genes <- data.frame(t(c(rep(NA, 5), -100, NA, -1, ""))) %>%
+    res0 <- data.frame(t(c(rep(NA, 5), -100, NA, -1, ""))) %>%
         mutate_all(as.numeric) %>%
         data.frame(c("Up-regulated", "Down-regulated")) %>%
-        set_colnames(colnames(top_genes)) %>%
-        rbind(top_genes)
-    ggplot(res, aes(log2fc, log10p)) +
-        geom_point(aes(color = Expression), size = 3, alpha = 0.5) +
+        set_colnames(colnames(res)) %>%
+        rbind(res)
+    p <- ggplot(res0, aes(log2fc, log10p)) +
+        geom_point(aes(color = Expression), size = 3 * cex, alpha = 0.5) +
         geom_vline(xintercept = c(-0.5, 0.5), colour = "gray", lty = 2, lwd = 1.2) +
         geom_hline(yintercept = ps, colour = "gray", lty = 2, lwd = 1.2) +
         xlab(expression("log"[2] * "FC")) +
         ylab(expression("-log"[10] * "P")) +
         scale_color_manual(values = c("dodgerblue3", "gray50", "firebrick3")) +
         guides(colour = guide_legend(override.aes = list(size = 2))) +
-        geom_text_repel(
-            data = top_genes,
-            mapping = aes(log2fc, log10p, label = name, color = Expression),
-            size = cex * 3
-        ) +
         scale_x_continuous(limits = max(abs(res$log2fc)) * c(-1, 1)) +
         scale_y_continuous(limits = c(0, max(abs(res$log10p)))) +
         # scale_y_continuous(breaks = ps, labels = p_lab) +
@@ -313,6 +308,15 @@ volcano_plot <- function(res, top_genes, title = "", legend = "right", cex = 1.5
         theme_classic() %>%
         theme_perso0(cex) +
         theme(legend.position = legend)
+    if (!is.null(top_genes)) {
+        p + geom_text_repel(
+            data = top_genes,
+            mapping = aes(log2fc, log10p, label = name, color = Expression),
+            size = cex * 6
+        )
+    } else {
+        p
+    }
 }
 
 # filter(res, Expression != "ns")
@@ -324,22 +328,23 @@ get_top <- function(res, fc_threshold = 1, p_threshold = 0.05, n = 1000) {
         res %>%
             filter(log2fc <= -fc_threshold & padj <= p_threshold)
     ) %>%
-        arrange(padj, desc(abs(log2fc))) %>%
+        arrange(desc(abs(log2fc), padj)) %>%
         head(n)
 }
 
 get_top0 <- function(res, fc_threshold = 0.5, p_threshold = 0.05, n = 1000, rank = FALSE) {
-    temp <- res %>% 
-    mutate(
-        rank_p = rank(desc(log10p)),
-        rank_fc = rank(desc(abs(log2FoldChange)))
-    ) %>%
-    mutate(rank = rank(rank_p + rank_fc)) %>% 
-    arrange(rank) %>% 
-    filter(abs(log2FoldChange) >= fc_threshold & padj <= p_threshold) %>%
-    head(n)
-    if (!rank) 
-       temp <- dplyr::select(temp, -c(rank, rank_p, rank_fc))
+    temp <- res %>%
+        mutate(
+            rank_p = rank(desc(log10p)),
+            rank_fc = rank(desc(abs(log2FoldChange)))
+        ) %>%
+        mutate(rank = rank(rank_p + rank_fc)) %>%
+        arrange(rank) %>%
+        filter(abs(log2FoldChange) >= fc_threshold & padj <= p_threshold) %>%
+        head(n)
+    if (!rank) {
+          temp <- dplyr::select(temp, -c(rank, rank_p, rank_fc))
+      }
     return(temp)
 }
 
