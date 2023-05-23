@@ -228,22 +228,81 @@ print_stats <- function(x, dec = 1) {
 }
 
 #' @export
-chi2 <- function(cl, x) {
-    temp0 <- data.frame(cls = as.character(cl), x) %>%
-        filter(!is.na(cls)) %>%
-        select(-cls) %>%
-        pivot_longer(everything()) %>%
-        group_by(name) %>%
-        nest()
-    lapply(seq(ncol(x)), function(i) chisq_test(cl, as.data.frame(temp0[i, ]$data)[, 1])) %>%
+chi2_test <- function(cl, x, method = "chisq", dec = 3) {
+    tmp <- list.map(
+        colnames(x),
+        pull(x, .) %>% data.frame(., cl) %>% table() %>% get(paste0(method, "_test"))()
+    ) %>%
+    # temp0 <- data.frame(cls = as.character(cl), x) %>%
+    #     filter(!is.na(cls)) %>%
+    #     select(-cls) %>%
+    #     pivot_longer(everything()) %>%
+    #     group_by(name) %>%
+    #     nest()
+    # lapply(seq(ncol(x)), function(i) chisq_test(cl, as.data.frame(temp0[i, ]$data)[, 1])) %>%
         Reduce(rbind, .) %>%
-        cbind(colnames(x), .) %>%
+        cbind(colnames(x) %>% str_replace_all("_", " ") %>% str_to_sentence(), .) %>%
         arrange(p) %>%
         adjust_pvalue(method = "BH") %>%
-        add_significance0(p.col = p.adj) %>%
-        select(-c("n", "df", "method", "p", "p.signif")) %>%
-        set_colnames(c("Variables", "Chi²", "P-adjusted", "")) %>%
-        kable0()
+        add_significance0(p.col = "p.adj") %>%
+        mutate(
+            p = ifelse(p < 0.001, "< 0.001", round(p, dec)),
+            p.adj = ifelse(p.adj < 0.001, "< 0.001", round(p.adj , dec))
+            ) %>%
+        select(-matches(c("^n$", "^df$", "^method$", "^p.signif$")))
+        if (method == "chisq") {
+            mutate(tmp, statistic = round(statistic, 1)) %>%
+            set_colnames(c("Variables", "X²", "p", "FDR", ""))
+        } else {
+            set_colnames(tmp, c("Variables", "p", "FDR", ""))
+        }
+}
+
+print_chi2_test <- function(x, dec = 3) {
+    if ("chisq_test" %in% class(x)) {
+        x$statistic <- paste0("X²(", x$df, ") = ", round(x$statistic, 1), ", ")
+    } else {
+        x$method <- "Fisher's Exact test"
+        x$statistic <- ""
+    }
+    if (x$p.signif == "ns") {
+        x$p.signif <- ""
+    }
+    if (x$p < 0.001) {
+        x$p <- "< 0.001"
+    } else {
+        x$p <- paste("=", round(x$p, dec))
+    }
+    paste0(x$method, ", ", x$statistic, "p ", x$p, x$p.signif, ", N = ", x$n)
+}
+
+post_hoc_chi2 <- function(x, method = "chisq", method_adjust = "BH", dec = 3) {
+    df0 <- set_colnames(x, c("var1", "var2"))
+    comb <- combn(pull(df0, var2) %>% unique() %>% length() %>% seq(), 2)
+    lapply(
+        seq(ncol(comb)),
+        function(i) {
+            count <- table(df0)[, comb[, i]]
+            get(paste0(method, "_test"))(count) %>%
+                mutate(
+                    groups = colnames(count) %>% paste(collapse = " vs "),
+                    group1 = comb[, i][1],
+                    group2 = comb[, i][2]
+                ) %>%
+                relocate(groups, .before = n)
+        }
+    ) %>% Reduce(rbind, .) %>%
+        mutate(
+            p = ifelse(p < 0.001, "< 0.001", round(p, dec)),
+            FDR = round(p.adjust(p, method_adjust), dec)
+        ) %>%
+        rename(` ` = p.signif) %>%
+        mutate() %>%
+        add_significance0(p.col = "FDR", output.col = "  ")  %>%
+        select(-matches(c("method"))) %>%
+        relocate(df, .before = p) #%>%
+    # set_colnames(colnames(.) %>% str_to_sentence())
+}
 
 jaccard <- function(x, y) {
     intersection <- sum(x == y, na.rm = TRUE)
