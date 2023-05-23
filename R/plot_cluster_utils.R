@@ -155,10 +155,9 @@ plot_mean_test <- function(x, i, stats, color = c("red", "blue")) {
 }
 
 #' @export
-plot_silhouette0 <- function(res_dist, cls, k, cex = 1) {
+plot_silhouette0 <- function(res_dist, cls, k, cex = 1, colors_k = get_colors()[seq(k) + 2]) {
     sils <- getSilhouettePerPart(cls, res_dist)
     sil_k <- sils[[k - 1]]
-    colors_k <- get_colors()[seq(k) + 2]
     # plotSilhouette(sil_k)
     # abline(v = mean(sil_k[, 3]), col = "red", lwd = 2, lty = 1)
     plot_silhouette(sil_k, colors_k, cex = cex)
@@ -198,8 +197,29 @@ scale0 <- function(x, method = "zscore") {
     if (method == "minmax") {
         heatmaply::normalize(x)
     } else {
-        scale(x)
+        x0 <- scale(x)
+        x0[is.na(x)] <- NA
+        return(x0)
     }
+}
+
+get_dist0 <- function(x, method = "euclidean"){
+    if (method %in% c("pearson", "spearman", "kendall")) {
+        t_cor <- stats::cor(t(x),  method = method, use = "pairwise.complete.obs")
+        t_cor[is.na(t_cor)] <- 0
+        dist <- stats::as.dist(1 - t_cor)
+    } else if(method == "jaccard") {
+        dist <- matrix(0, nrow(x), nrow(x)) %>% set_rownames(rownames(x))
+        for (i in seq(nrow(x))) {
+            for (j in seq(nrow(x))) {
+                dist[i,j] <- jaccard(unlist(x[i, ]), unlist(x[j, ]))
+            }
+        }
+        dist <- stats::as.dist(1 - dist)
+    } else {
+        dist <- stats::dist(x, method = method)
+    }
+    return(dist)
 }
 
 #' @export
@@ -224,4 +244,9 @@ chi2 <- function(cl, x) {
         select(-c("n", "df", "method", "p", "p.signif")) %>%
         set_colnames(c("Variables", "Chi²", "P-adjusted", "")) %>%
         kable0()
+
+jaccard <- function(x, y) {
+    intersection <- sum(x == y, na.rm = TRUE)
+    union <- length(x) + length(y) - intersection
+    return (intersection/union)
 }
