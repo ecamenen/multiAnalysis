@@ -350,17 +350,46 @@ res %>%
     as.data.frame() %>%
     arrange(desc(log2FoldChange)) %>%
     head()
-plotCounts(l_de0[[1]], gene = "DUSP1", intgroup = "group", returnData = TRUE) %>%
-    mutate(group = factor(group, labels = c("Yes", "No"))) %>%
+i <- 2
+plot_count <- function(i, gene = gene, cex = 1.5) {
+    name <- str_split(names(blocks)[i], " vs ")[[1]]
+    plotCounts(l_de0[[i]], gene = gene, intgroup = "group", returnData = TRUE) %>%
+    mutate(group = factor(group, labels = c(name[1], name[2]))) %>%
     ggplot(aes(x = group, y = count, color = group)) +
-    geom_point(position = position_jitter(w = 0.1, h = 0)) +
-    scale_y_log10(breaks = c(25, 100, 400)) +
+    geom_point(position = position_jitter(w = 0.1, h = 0), size = cex * 3, alpha = 0.5) +
+    geom_text_repel(aes(label = colnames(l_de0[[i]]), x = group, y = count, color = group), size = cex * 3) +
+    scale_y_log10() +
     theme_bw() +
-    ylab("Count") +
-    xlab("Anti-IL6") +
-    scale_color_manual(values = get_colors()[c(3, 1)], name = "Anti-IL6") +
-    theme(legend.position = "none")
+    labs(
+        y = "Count",
+        x = gene
+    ) +
+    scale_color_manual(values = get_colors()[c(2, 4)], name = gene) +
+    theme(
+        legend.position = "none",
+        axis.text = element_text(colour = "gray50", size = cex * 10),
+        axis.title = element_text(colour = "gray50", size = cex * 12, face = "bold.italic"),
+        axis.ticks = element_blank(),
+        panel.grid.major.x = element_blank(),
+        panel.border = element_blank()
+    )
+}
+plot_count(i, "VEGFA")
+
+list.map(top_genes[[i]], f(x) ~ plot_count(i, gene = x) + ylab("")) %>% plot_grid(
+    plotlist = .,
+    nrow = 3,
+    ncol = 3,
+    align = "hv"
+)
 # use_data(l_de_manif, overwrite = TRUE)
+
+outs <- rownames(blocks[[i]]) %>% paste0("^", ., "$", collapse = "|")
+name <- str_split(names(blocks)[i], " vs ")[[1]]
+attributes(clinic_intersect)$code %>% filter(str_detect(column_code, paste0("^", c("C_2643_3796", "C_2643_3803", "C_2649_3888", "C_2649_3895", "C_2649_3891", "C_2643_3797"), "$", collapse = "|"))) %>% pull(item_name) %>% c("batch") %>% select(clinic_intersect, .) %>% mutate(clinical_center = str_remove_all(clinical_center, "\\d{2} - ") %>% str_remove_all(" \\(.+\\)") %>% str_remove_all(".+ [-–] ")) %>% filter(str_detect(immun_aid_identifier, outs)) %>% mutate(Group = ifelse(blocks[[i]] == 0, name[1], name[2])) %>% select(2, 8, 3:4, 7, 6, 1) %>% set_colnames(colnames(.) %>% str_replace_all("_", " ") %>% str_to_sentence()) %>% arrange(Group) %>% kable0()
+
+
+list.map(list("IL10", "BCL6", "VEGFA"), f(x) ~ plotCounts(l_de0[[i]], gene = x, intgroup = "group", returnData = TRUE) %>% select(-group) %>% set_colnames(x)) %>% Reduce(cbind, .)
 ```
 
 # Significant genes
