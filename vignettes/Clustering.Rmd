@@ -24,23 +24,84 @@ hc_metric <- "spearman"
 hc_index <- "silhouette"
 k <- 2
 n_boot <- 1000
-MAX_CLUSTERS <- 6
+MAX_CLUSTERS <- 10
 colors_k <- get_colors()[seq(k) + 2]
 ```
 
 # Data preparation
-```{r}
+```{r formatting, eval = FALSE}
 # Levels
 row_annotation <- data.frame(Disease = disease)
 names_levels <- levels(disease)
-# names_levels <- c("Still", "Control", "SOJIA")
-blocks <- blocks[[1]] %>% select(-c("eye_manifestations", "cardiac_manifestations")) # %>% select(-c("gender", "BMI", "age_at_inclusion_time", "batch"))
 
+# names_levels <- c("Still", "Control", "SOJIA")
+
+vars2 <- c("immun_aid_identifier", "weight", "height") # , "fatigue")
+blocks <- blocks %>% select(
+    -c(
+        vars2,
+        # ends_with("_global_assessment"),
+        ends_with("_upper_limit_of_normal"),
+        starts_with("max_"),
+        "disease"
+    )
+)
+# select(-c("eye_manifestations", "cardiac_manifestations")) # %>%
+# select(-c("gender", "BMI", "age_at_inclusion_time", "batch"))
+colnames(blocks) <- colnames(blocks) %>%
+    tools::toTitleCase() %>%
+    gsub("_", " ", .)
+```
+
+```{r}
+if (block_name == "t_biol")
+blocks <- blocks %>% select(starts_with("V1")) %>% set_colnames(colnames(.) %>% str_remove_all("V1\\.")) %>% select(-c(`Conjugated bilirubin`, `Neutrophils %`, `Erythrocyte sedimentation rate`, `ASAT ULN`, `Alk phosphatases ULN`, `Max CRP`, `Ferritin`, SAA, ends_with(" ULN")))
+
+if (block_name == "t_aidai") {
+  blocks <- apply(blocks, 2, function(x) (x == 0) %>% `!` %>% which() %>% length()) %>% `>`(2) %>% which() %>% select(blocks, .)
+}
+
+if (block_name == "t_muscu") {
+  blocks <- apply(blocks, 2, function(x) sum(x, na.rm = TRUE))  %>% `>`(2) %>% which() %>% select(blocks, .)
+}
+  
+# Remove individuals with high levels of NA
+res <- sapply(rownames(blocks), function(i) round((length(which(is.na(blocks[i, ]))) / ncol(blocks)) * 100, 1))
+# names(res) <- clinic_intersect$immun_aid_identifier
+plotHistogram(df = res, cex = 1.5) 
+res0 <- sapply(rownames(blocks), function(i) (length(which(blocks[i, ] > 0))))
+plotHistogram(df = res0, cex = 1.5, rows = ncol(blocks)) -> p
+# list.map(list(2:4, 5:7, 8:ncol(blocks)), f(x) ~ {
+#   sapply(rownames(blocks), function(i) (length(which(select(blocks, x)[i, ] > 0)))) %>%
+#   plotHistogram(df = ., cex = 1.5, ratio = 7, rows = ncol(blocks))
+# }) ->p2
+#     plot_grid(
+#         plotlist = c(list(p), p2),
+#         align = "hv",
+#         nrow = 1,
+#         ncol = 4
+#     )
+# res1 <- sapply(rownames(blocks), function(i) (sum(blocks[i, ], na.rm = TRUE))) 
+# plot_violin0(res1, colour = "red", size = 3, pch_colour = "black", pch_alpha = 0.5, title = "")
+# name_inds <- names(res[res > 50])
+# clinic_intersect %>% filter(str_detect(immun_aid_identifier, paste0("^", name_inds, "$", collapse = "|"))) %>% select(immun_aid_identifier, disease) -> temp
+# name_lvls <- levels(clinic_intersect$disease)[unique(temp$disease) %>% sort()]
+# table(temp$disease)
+# res[res > 50]
+if (block_name == "t_muscu") {
+    # blocks <-  slice(blocks, -which(res0 < 2))
+} else {
+    blocks <- blocks[-which(res == 100), ]
+}
+
+res_scaled_na <- scale0(blocks, method = "minmax")
+
+# if (block_name == "t_aidai") {
+#   blocks[blocks == 0] <- NA
+# }
 
 # Scaling
-res_scaled_na <- scale0(blocks)
-res_scaled <- res_scaled_na
-res_scaled[is.na(res_scaled)] <- 0
+res_scaled <- scale0(blocks)
 ```
 
 # Optimal k
@@ -80,7 +141,7 @@ res.nbclust <- NbClust(
 
 # Distance
 ```{r}
-res_dist <- get_dist(res_scaled, stand = FALSE, method = hc_metric)
+res_dist <- get_dist0(res_scaled, method = hc_metric)
 
 # fviz_dist(
 #     res_dist,
@@ -214,19 +275,19 @@ heatmaply(
 ) %>% layout(xaxis = list(ticklen = 0), yaxis2 = list(ticklen = 0))
 
 row_dend0 <- res_scaled %>%
-    get_dist(stand = FALSE, method = hc_metric) %>%
+    get_dist0(method = hc_metric) %>%
     hclust(method = hc_method)
 
 col_dend0 <- res_scaled %>%
     t() %>%
-    get_dist(stand = FALSE, method = hc_metric) %>%
+    get_dist0(method = hc_metric) %>%
     hclust(method = hc_method)
 
 pheatmap(
     res_scaled_na,
     color =  colorRampPalette(colors_ind)(100),
     angle_col = 315,
-    na_col = "black",
+    na_col = "white",
     annotation_row = row_annotation,
     border_color = NA,
     annotation_colors = list(Disease = row_col),
@@ -264,8 +325,8 @@ plot_silhouette0(res_dist, cls, k, colors_k = get_colors()[seq(k)])
 # Variable contribution
 100 * getCtrVar(k, cls[[k - 1]], res_scaled)
 ctr <- getDiscriminantVariables(k, cls[[k - 1]], res_scaled, ncol(blocks))
-# rownames(ctr) <- str_sub(rownames(ctr), 1, 40) %>% snakecase::to_any_case(unique_sep = NULL, parsing_option = 3)
-plotHistogram(df = ctr)
+# rownames(ctr) <- str_sub(rownames(ctr), 1, 40) %>% to_any_case(unique_sep = NULL, parsing_option = 3)
+plotHistogram(df = ctr, cex = 1.5, dec = 0, ratio = 4)
 # round(ctr[, 1, drop = FALSE], 2)
 
 # x = blocks; res = sapply(seq(nrow(x)), function(i) round((length(which(is.na(x[i, ]))) / ncol(x))*100, 1))
@@ -275,9 +336,61 @@ plotHistogram(df = ctr)
 
 cl <- cls[[k - 1]]
 n <- 6
-dat <- as.data.frame(clinic_intersect[, colnames(blocks)]) %>%
-    cbind(cl = as.character(cl))
-stats <- calculate_test1(dat)
+# blocks0 <- blocks
+# var <- c("alat", "asat", "ggt")
+# colnames(blocks0) <- to_any_case(colnames(blocks0), unique_sep = NULL, parsing_option = 3)
+# colnames(blocks0)[colnames(blocks0) %in% var] <- toupper(var)
+
+stats <- as.data.frame(blocks) %>%
+    cbind(cl = as.character(cl)) %>%
+    calculate_test1(method = "kruskal") %>% 
+    arrange(p)
+filter(stats, p <= 0.05) %>% select(-c(" ")) %>% kable0()
+filter(stats, p <= 0.05) %>% pull(Variables) %>% list.map(f(x) ~ select(blocks, x) %>% mutate(cl = cl) %>% group_by(cl) %>% group_split() %>% as.list() %>% list.map(f(i) ~ pull(i, x)) %>% list_cbind() %>% set_colnames(paste0("G", seq(length(unique(cl))))) %>% plot_violin0(method = "kruskal", colour = get_colors()[seq(length(unique(cl)))], size = 3, pch_colour = "black", pch_alpha = 0.5, ylab = x, title = "", wrap = 10)) %>%
+    plot_grid(
+        plotlist = .,
+        align = "hv",
+        nrow = 2,
+        ncol = 3
+    )
+
+filter(stats, p <= 0.05) %>% pull(Variables) %>% list.map(f(x, y, z) ~ select(blocks, x) %>% mutate(cl = cl) %>% set_colnames(c("name", "cl")) %>% dunn_test(name ~ cl, p.adjust.method = "BH") %>% filter(p <= .05))
+
+filter(stats, p <= 0.05) %>% pull(Variables) %>% list.map(f(x) ~ select(blocks, x) %>% mutate(cl = cl) %>% group_by(cl) %>% group_split() %>% as.list() %>% list.map(f(i) ~ pull(i, x)) %>% list_cbind() %>% set_colnames(paste0("G", seq(3))) %>% get_melt() %>% dunn_test(value ~ name, p.adjust.method = "BH") %>% add_xy_position(x = "group"))
+
+data("t_general")
+
+t_general0 <- t_general %>% mutate(immun_aid_identifier = rownames(.) %>% as.double()) %>% left_join(select(clinic_intersect, age_at_inclusion_time, immun_aid_identifier)) %>% rename(`Age at inclusion time` = age_at_inclusion_time)
+blocks0 <- blocks %>% mutate(immun_aid_identifier = rownames(.) %>% as.double()) %>% left_join(t_general0) %>% select(c(colnames(t_general0), -c(immun_aid_identifier, `In how many months?`, `Weight loss (kg)`)))
+as.data.frame(blocks0) %>%
+    cbind(cl = as.character(cl)) %>%
+    calculate_test1(method = "kruskal") %>% 
+    arrange(p)
+
+confonding <- list.map(
+  select(blocks0, -c("Max (°C)", "Number of consecutive days")),
+  cor_test0(blocks, ., method = "spearman") %>% print_cor() %>% filter(p <= 0.05)
+)
+
+list.map(
+  rownames(confonding$`Age at inclusion time`),
+f(x, y) ~ plot_cor2(data_frame(pull(blocks, x), pull(blocks0, "Age at inclusion time")) %>% set_colnames(c(x, "Age at inclusion time")), method = "spearman", color = get_colors()[-c(6, 7)][y])
+)%>%
+    plot_grid(
+        plotlist = .,
+        align = "hv",
+        nrow = 2,
+        ncol = 3
+    )
+
+list.map(colnames(select(blocks0, -c("Max (°C)", "Number of consecutive days"))), f(x) ~ select(blocks0, x) %>% mutate(cl = cl) %>% group_by(cl) %>% group_split() %>% as.list() %>% list.map(f(i) ~ pull(i, x)) %>% list_cbind() %>% set_colnames(paste0("G", seq(length(unique(cl))))) %>% plot_violin0(method = "kruskal", colour = get_colors()[seq(length(unique(cl)))], size = 3, pch_colour = "black", pch_alpha = 0.5, ylab = x, title = "")) %>%
+    plot_grid(
+        plotlist = .,
+        align = "hv",
+        nrow = 2,
+        ncol = 2
+    )
+
 plot_mean_test(dat, "physician_global_assessment", as_tibble(stats), colors_k)
 
 n <- 8
@@ -316,9 +429,74 @@ arrange(tot, desc(ctr)) %>%
     # slice(seq(n)) %>%
     select(-c(starts_with("n_"), contains("sd_"), "p", "p.signif"))
 
-tab <- data.frame(batch = clinic_intersect$batch, group = as.numeric(cl))
-fisher_test(table(tab))
-pairwise_fisher_test(table(tab))
+vars <- c("batch", "gender", "patient_ethnicity", "age_at_inclusion_time")
+t_conf <- blocks %>% 
+  mutate(immun_aid_identifier = rownames(.) %>% as.double()) %>% 
+  left_join(select(clinic_intersect, c(vars, immun_aid_identifier))) %>% 
+  select(-c(immun_aid_identifier, colnames(blocks))) %>% 
+  mutate(
+    batch = as.factor(batch),
+    age_at_inclusion_time = ifelse(age_at_inclusion_time >= 18, "Adult", "Children")
+  )
+  chi2_test(cl, t_conf, method = "fisher")
+
+confonding1 <- list.map(
+  select(t_conf, -1),
+  f(i) ~ as.data.frame(blocks) %>%
+      cbind(cl = as.character(i)) %>%
+      calculate_test1(method = "wilcox") %>% 
+      arrange(p) %>%
+    filter(p <= 0.05)
+)
+# pairwise_fisher_test(table(tab))
+
+list.map(
+  confonding1[1:2], 
+  f(x, xtt, xt) ~ {
+    pull(x, Variables) %>% list.map(
+      f(y) ~ {
+select(blocks, y) %>% mutate(cl = pull(t_conf, xt)) %>% group_by(cl) %>% group_split() %>% as.list() %>% list.map(f(i) ~ pull(i, 1)) %>% list_cbind() %>% set_colnames(pull(t_conf, xt) %>% levels()) %>% plot_violin0(method = "wilcox", colour = sapply(c(25, 75), function(j) col2hcl(get_colors()[xtt], l = j)), size = 3, pch_colour = "black", ylab = y, pch_alpha = 0.5, title = "", wrap = 10)
+})
+}) -> p
+plot_grid(
+    plotlist = c(p[[1]], list(NULL), p[[2]]),
+    align = "hv",
+    nrow = 2,
+    ncol = 4
+)
+    
+confonding1[[4]] <- as.data.frame(blocks[-19, ]) %>%
+  cbind(cl = as.character(pull(t_conf, batch)[-19])) %>%
+  calculate_test1(method = "wilcox") %>% 
+  arrange(p) %>%
+  filter(p <= 0.05)
+
+pull(confonding1[[4]], Variables) %>% list.map(
+      f(y) ~ {
+select(blocks[-19, ], y) %>% mutate(cl = pull(t_conf, batch)[-19]) %>% group_by(cl) %>% group_split() %>% as.list() %>% list.map(f(i) ~ pull(i, 1)) %>% list_cbind() %>% set_colnames(paste0("Batch", c(2, 3))) %>% plot_violin0(method = "wilcox", colour = c(get_colors()[3], alpha(get_colors()[3],  alpha = 0.25)), size = 3, pch_colour = "black", ylab = y, pch_alpha = 0.5, title = "", wrap = 10)
+}) %>%
+  plot_grid(
+        plotlist = .,
+        align = "hv",
+        nrow = 1,
+        ncol = 3
+    )
+
+confonding0 <- list.map(
+  vars[-1], 
+f(i) ~ as.data.frame(blocks) %>%
+    cbind(cl = as.character(pull(tab, i))) %>%
+    calculate_test1(method = "wilcox") %>% 
+    arrange(p) %>%
+  filter(p <= 0.05)
+)
+
+as.data.frame(blocks[-19, ]) %>%
+    cbind(cl = as.character(pull(tab, 1)[-19])) %>%
+    calculate_test1(method = "wilcox") %>% 
+    arrange(p) %>%
+    filter(p <= 0.05) %>% kable0()
+
 plotHistogram(df = ctr) +
     labs(subtitle = expression(paste("Fisher test for count data (2,32), ", italic("p"), " = ", "<0.0001"))) +
     theme(plot.subtitle = element_text(size = 15, hjust = 0.5, face = "italic", color = "black"))
