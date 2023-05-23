@@ -67,45 +67,65 @@ theme_perso_2D <- function(p) {
 #' p <- ggplot(df, aes(order, x, fill = color))
 #' plotHistogram(p, df, "Histogram", as.character(df$color))
 #' @export plotHistogram
-plotHistogram <- function(p = NULL, df = NULL, hjust = 0, vjust = 0.5, n = 100, title = "", color = "black", color_gradient = c("#FFF5F0", "#99000D")) {
-    if (is.null(p)) {
-        df0 <- as.data.frame(df)
-        colnames(df0)[1] <- "val"
-        if (n < nrow(df0)) {
-            n <- nrow(df0)
-        }
-        df <- (
-            df0 %>%
-                arrange(desc(val)) %>%
-                mutate(order = rev(seq(nrow(df0))))
-        )[seq(n), ]
-        p <- ggplot(df, aes(order, val, fill = order)) +
-            theme_classic()
+plotHistogram <- function(p = NULL, df = NULL, hjust = 0, vjust = 0.5, n = 100, title = "", color_title = "black", color_gradient = c("gray", "#99000D"), cex = 1, ratio = 15, dec = 0, rows = NULL, colors = NULL) {
+  if (is.null(p)) {
+    df0 <- as.data.frame(df)
+    colnames(df0)[1] <- "val"
+    if (n > nrow(df0)) {
+      n <- nrow(df0)
     }
-    p +
-        # TODO: if NB_ROW > X, uncomment this
-        # geom_hline(yintercept = c(-.5,.5), col="grey", linetype="dotted", size=1) +
-        geom_hline(yintercept = 0, col = "grey", size = 1) +
-        geom_bar(stat = "identity") +
-        coord_flip() +
-        scale_x_continuous(breaks = df$order, labels = rownames(df)) +
-        labs(
-            title = title,
-            x = "", y = "",
-            fill = "Cluster"
-        ) +
-        # theme_classic() +
-        # theme_perso() +
-        theme(
-            axis.text.y = element_text(size = 16, face = "italic", color = color),
-            axis.text.x = element_text(size = 12, face = "italic", color = "darkgrey", angle = 90),
-            axis.line = element_blank(),
-            axis.ticks = element_blank(),
-            plot.subtitle = element_text(hjust = 0.5, size = 16, face = "italic")
-        ) +
-        geom_text(aes(label = round(..y.., 1)), hjust = hjust, vjust = vjust) +
-        theme(legend.position = "none") +
-        scale_fill_gradient(low = color_gradient[1], high = color_gradient[2])
+    df <- (
+      df0 %>%
+        mutate(name = rownames(.)) %>%
+        arrange(desc(val)) %>%
+        mutate(order = rev(seq(nrow(df0))))
+    ) %>% head(n) %>%
+      set_rownames(.$name)
+    p <- ggplot(df, aes(order, val, fill = order)) +
+      theme_minimal()
+  }
+  if (is.null(colors))
+    colors <- rev(colorRampPalette(color_gradient)(length(p$data$val)))
+  y_lab <- p$data$val / 2
+  x_lab <- ""
+  if (!is.null(rows))
+    x_lab <- (round(p$data$val, dec) / rows * 100) %>%
+    round(dec) %>%
+    paste("%")
+  x_lab[p$data$val < 2] <- ""
+  p +
+    # TODO: if NB_ROW > X, uncomment this
+    # geom_hline(yintercept = c(-.5,.5), col="grey", linetype="dotted", size=1) +
+    geom_hline(yintercept = 0, col = "grey", size = 1) +
+    geom_bar(stat = "identity") +
+    expand_limits(y = max(p$data$val) + max(p$data$val) / ratio) +
+    coord_flip() +
+    scale_x_continuous(breaks = df$order, labels = rownames(df)) +
+    labs(
+      title = title,
+      x = "",
+      y = ""
+    ) +
+    geom_text(
+      aes(color = I("white"), y = y_lab, label = x_lab),
+      size = cex * 3.5
+    ) +
+    # theme_classic() +
+    # theme_perso() +
+    theme(
+      axis.text.y = element_text(size = cex * 10, face = "italic", color = colors),
+      axis.text.x = element_text(size = cex * 10, face = "italic", color = "darkgrey"),
+      axis.line = element_blank(),
+      axis.ticks = element_blank(),
+      plot.title = element_text(size = cex * 16, face = "bold", color = color_title),
+      plot.subtitle = element_text(hjust = 0.5, size = cex * 16, face = "italic"),
+      panel.grid.major.y = element_blank(),
+      panel.grid.minor = element_blank()
+    ) +
+    # label = round(..y.., dec) %>% paste0("%")
+    geom_text(aes(label = round(..y.., dec) %>% paste0("%")), hjust = hjust, vjust = vjust, size = cex * 4, color = colors) +
+    theme(legend.position = "none") +
+    scale_fill_gradient(low = color_gradient[1], high = color_gradient[2])
 }
 
 #' Default font for plots
@@ -266,7 +286,7 @@ plot_enrich <- function(x, n = 20, title = NULL, gsea = FALSE, cex = 1, ratio = 
 
 #' @export
 kable0 <- function(x, align = "c") {
-    kbl(x, escape = FALSE, align = align) %>%
+    kbl(x, escape = FALSE, align = c("l", rep(align, ncol(x) -1))) %>%
         kable_minimal(full_width = FALSE) %>%
         column_spec(1, bold = TRUE, color = "#a9a9a9")
 }
@@ -288,7 +308,7 @@ volcano_plot <- function(res, top_genes = NULL, title = "", legend = "right", ce
     ps <- -log(0.05, 10)
     # ds <- c(min(top_genes$log2fc), max(top_genes$log2fc))
     # ds <- c(-1.2, -0.8, -0.5, 0.5, 0.8, 1.2)
-    res0 <- data.frame(t(c(rep(NA, 5), -100, NA, -1, ""))) %>%
+    res0 <- data.frame(t(c(rep(NA, 6), -100, NA, -1, ""))) %>%
         mutate_all(as.numeric) %>%
         data.frame(c("Up-regulated", "Down-regulated")) %>%
         set_colnames(colnames(res)) %>%
@@ -336,7 +356,8 @@ get_top0 <- function(res, fc_threshold = 0.5, p_threshold = 0.05, n = 1000, rank
     temp <- res %>%
         mutate(
             rank_p = rank(desc(log10p)),
-            rank_fc = rank(desc(abs(log2FoldChange)))
+            rank_fc = rank(desc(abs(log2FoldChange))),
+            pfc = log10p * log2fc,
         ) %>%
         mutate(rank = rank(rank_p + rank_fc)) %>%
         arrange(rank) %>%
@@ -363,4 +384,110 @@ differential_analysis <- function(x, fc_threshold = 0.8, p_threshold = 0.01) {
                 TRUE ~ "ns"
             )
         )
+}
+
+
+cor_test0 <- function(x, y, method = "spearman") {
+  list.map(
+    x,
+    {
+      tmp <- cor.test(., y, method = method)
+      # dl = tmp$parameter,
+      data.frame(t = tmp$statistic, p = tmp$p.value, R = tmp$estimate ^ 2)
+    }
+  ) %>% list.rbind()
+}
+
+print_cor <- function(x, dec = 3) {
+  arrange(x, desc(R)) %>%
+    adjust_pvalue(method = "BH") %>%
+    add_significance0(p.col = "p.adj") %>%
+    mutate(
+    t = round(t, 1),
+    p = ifelse(p < 0.001, "< 0.001", round(p, dec)),
+    p.adj = round(p.adj , dec),
+    R = round(R, 2)
+  )
+}
+
+
+chi_plot <- function(
+  x,
+  colour1 = NULL,
+  colour2 = NULL,
+  cex = 1,
+  cex_main = 15 * cex,
+  cex_sub = 13 * cex,
+  cex_axis = 17 * cex,
+  method = "chisq",
+  method_adjust = "BH",
+  wrap = 10,
+  ratio = 7
+) {
+  df0 <- set_colnames(df, c("var1", "var2"))
+  if (is.null(colour1)) {
+    colour1 <- get_colors()[seq(unique(pull(df, 1)))]
+  }
+  if (is.null(colour2)) {
+    colour2 <- get_colors()[seq(unique(pull(df, 1))) + 9]
+  }
+  counts <- data.frame(table(df0)) %>%
+    mutate(label = Freq)
+
+  max_val <- group_by(df0, var2) %>%
+    summarise(label = length(var2)) %>%
+    pull(label) %>%
+    max(na.rm = TRUE)
+  stats <- post_hoc_chi2(df, method = method, method_adjust = method_adjust) %>%
+    filter(p <= 0.05) %>%
+    mutate(
+      var1 = df0$var1[1],
+      y.position = max_val + (as.numeric(rownames(.)) * max_val / ratio)
+    )
+
+  p <- ggplot(data = counts, aes(x = var2, y = Freq, fill = var1)) +
+    geom_bar(stat = "identity", position = "stack") +
+    xlab(colnames(df)[2]) +
+    ylab("Count") +
+    scale_fill_manual(values = colour1, name = colnames(df)[1]) +
+    geom_text(
+      aes(label = label, y = Freq),
+      position = position_stack(vjust = 0.5),
+      colour = I("white"),
+      size = cex * 7
+    ) +
+    scale_x_discrete(
+      labels = group_by(df0, var2) %>%
+        summarise(label = length(var2)) %>%
+        mutate(label = paste0(var2, " (N = ", label, ")")) %>%
+        pull(label) %>%
+        str_wrap(wrap)
+    ) +
+    labs(
+      subtitle = table(df0) %>% get(paste0(method, "_test"))() %>% print_chi2_test()
+    ) +
+    ggpubr::stat_pvalue_manual(
+      stats,
+      label = " ",
+      color = "gray50",
+      bracket.size = 0.7,
+      size = cex * 6,
+      hide.ns = TRUE,
+      tip.length = 0
+    )
+  theme_violin1(
+    p,
+    cex = cex,
+    cex_main = cex_main,
+    cex_sub = cex_sub,
+    cex_axis = cex_axis,
+    guide = TRUE,
+    color_subtitle = colour2
+  ) +
+    theme(
+      axis.text.y = element_text(
+        size = cex * 13,
+        color = "gray50"
+      )
+    )
 }
