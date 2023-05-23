@@ -92,13 +92,52 @@ save_tiff <- function(f, filename = "violinplot_clin.tiff") {
 }
 
 #' @export
-calculate_test1 <- function(x, method = "anova") {
+calculate_test1 <- function(x, method = "kruskal", method_adjust = "BH", dec = 3) {
     df <- pivot_longer(x, !cl) %>%
         group_by(name) %>%
         # filter(!is.na(value)) %>%
         base::get(paste0(method, "_test"))(value ~ cl) %>%
-        add_significance()
+        as.data.frame() %>%
+        add_significance0(p.col = "p", output.col = " ") %>%
+        mutate(
+            FDR = p.adjust(p, method_adjust),
+            p = ifelse(p < 0.001, "< 0.001", round(p, dec))
+        ) %>%
+        add_significance0(p.col = "FDR", output.col = "  ")  %>%
+        mutate(FDR = round(FDR, dec)) %>%
+        select(-matches(c("\\.y\\.", "df", "method", "Effect", "p<.05", "ges", "^n(\\d*)?$", "^group"))) %>%
+        set_colnames(colnames(.) %>% str_replace("name", "Variables"))
+    if (method == "anova") {
+        df <- mutate(df, F = round(F, 1))
+    } else {
+        # name_stat <- switch(
+        #     method ,
+        #     "t" = "F",
+        #     "kruskal" = "K",
+        #     "chisq" = "X²",
+        #     "wilcox" = "W"
+        # )
+        df <- mutate(df, statistic = round(statistic, 1)) # %>% rename(name_stat = statistic)
+        if (method == "kruskal")
+            df <- rename(df, K = statistic)
+        if (method == "chisq")
+            df <- rename(df, `X²` = statistic)
+        if (method == "t")
+            df <- rename(df, `F` = statistic)
+        if (method == "wilcox")
+            df <- rename(df, `W` = statistic)
+    }
+    # %>% str_remove_all(".*signif.*")
     return(df)
+}
+
+add_significance0 <- function(x, ns = "", ...) {
+    add_significance(
+        x,
+        cutpoints = c(0, 1e-03, 1e-02, 5e-02, 1),
+        symbols = c("***", "**", "*", ns),
+        ...
+    )
 }
 
 #' @export
@@ -284,11 +323,7 @@ post_hoc_chi2 <- function(x, method = "chisq", method_adjust = "BH", dec = 3) {
         function(i) {
             count <- table(df0)[, comb[, i]]
             get(paste0(method, "_test"))(count) %>%
-                mutate(
-                    groups = colnames(count) %>% paste(collapse = " vs "),
-                    group1 = comb[, i][1],
-                    group2 = comb[, i][2]
-                ) %>%
+                mutate(groups = colnames(count) %>% paste(collapse = " vs ")) %>%
                 relocate(groups, .before = n)
         }
     ) %>% Reduce(rbind, .) %>%
@@ -299,9 +334,9 @@ post_hoc_chi2 <- function(x, method = "chisq", method_adjust = "BH", dec = 3) {
         rename(` ` = p.signif) %>%
         mutate() %>%
         add_significance0(p.col = "FDR", output.col = "  ")  %>%
+        set_colnames(colnames(.) %>% str_to_sentence()) %>%
         select(-matches(c("method"))) %>%
-        relocate(df, .before = p) #%>%
-    # set_colnames(colnames(.) %>% str_to_sentence())
+        relocate(Df, .before = P)
 }
 
 jaccard <- function(x, y) {
