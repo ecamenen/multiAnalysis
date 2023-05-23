@@ -822,7 +822,9 @@ getDistPerVariable <- function(d, cl) {
         # in the dataset, for a metabolite row, loop an each metadabolite column
         # values are affected the corresponding cluster row and metabolite column in ctr
         for (j in 1:ncol(d)) {
-            ctr[cli, j] <- ctr[cli, j] + d[i, j]
+            if(!is.na(d[i, j])) {
+                ctr[cli, j] <- ctr[cli, j] + d[i, j]
+            }
         }
     }
     colnames(ctr) <- colnames(d)
@@ -913,7 +915,7 @@ getDiscriminantVariables <- function(n, cl, d, m) {
     }
 
     ctr <- 100 * getCtrVar(n, cl, d)
-    max_ctr <- apply(ctr, 2, sum)
+    max_ctr <- apply(ctr, 2, function(x) sum(x, na.rm = FALSE))
     # which_max_ctr= apply(ctr, 2, which.max)
     # color = as.character(which_max_ctr),
     data.frame(discr_var = max_ctr[order(max_ctr, decreasing = TRUE)], order = length(max_ctr):1)[0:(m), ]
