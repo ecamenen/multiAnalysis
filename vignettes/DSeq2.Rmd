@@ -158,9 +158,9 @@ blocks <- data.frame(blocks)[common_rows, ] %>% select(contains(c("Mucocutaneous
 ```{r}
 blocks0 <- blocks
 if ("Corticosteroid" %in% colnames(blocks)) {
-    selected_comb <- c("Naive vs GC-Corticoid only", "Naive vs aIL1 only", "aIL1 only vs. GC-Corticoid + aIL1", "Naive vs GC-Corticoid + aIL1", "GC-Corticoid only vs. GC-Corticoid + aIL1")
+    selected_comb <- c("Naive vs GCs only", "Naive vs aIL1 only", "aIL1 only vs GCs + aIL1", "Naive vs GCs + aIL1", "GCs only vs GCs + aIL1")
     blocks <- blocks %>%
-        mutate(`Naive vs GC-Corticoid only` = (Corticosteroid == 1 & Anti.IL1 != 1 & Anti.IL6 != 1 & DMARDs != 1) | Naive == 1, `Naive vs aIL1 only` = (Corticosteroid != 1 & Anti.IL1 == 1 & Anti.IL6 != 1 & DMARDs != 1) | Naive == 1, `GC-Corticoid only vs. GC-Corticoid + aIL1` = (Corticosteroid == 1 & Anti.IL1 != 1 & Anti.IL6 != 1 & DMARDs != 1) | (Corticosteroid == 1 & Anti.IL1 == 1 & Anti.IL6 != 1 & DMARDs != 1), `aIL1 only vs. GC-Corticoid + aIL1` = (Corticosteroid != 1 & Anti.IL1 == 1 & Anti.IL6 != 1 & DMARDs != 1) | (Corticosteroid == 1 & Anti.IL1 == 1 & Anti.IL6 != 1 & DMARDs != 1), `Naive vs GC-Corticoid + aIL1` = (Corticosteroid == 1 & Anti.IL1 == 1 & Anti.IL6 != 1 & DMARDs != 1) | Naive == 1, Anti.IL12 = Anti.IL1, Corticosteroid2 = Corticosteroid) %>%
+        mutate(`Naive vs GCs only` = (Corticosteroid == 1 & Anti.IL1 != 1 & Anti.IL6 != 1 & DMARDs != 1) | Naive == 1, `Naive vs aIL1 only` = (Corticosteroid != 1 & Anti.IL1 == 1 & Anti.IL6 != 1 & DMARDs != 1) | Naive == 1, `GCs only vs GCs + aIL1` = (Corticosteroid == 1 & Anti.IL1 != 1 & Anti.IL6 != 1 & DMARDs != 1) | (Corticosteroid == 1 & Anti.IL1 == 1 & Anti.IL6 != 1 & DMARDs != 1), `aIL1 only vs GCs + aIL1` = (Corticosteroid != 1 & Anti.IL1 == 1 & Anti.IL6 != 1 & DMARDs != 1) | (Corticosteroid == 1 & Anti.IL1 == 1 & Anti.IL6 != 1 & DMARDs != 1), `Naive vs GCs + aIL1` = (Corticosteroid == 1 & Anti.IL1 == 1 & Anti.IL6 != 1 & DMARDs != 1) | Naive == 1, Anti.IL12 = Anti.IL1, Corticosteroid2 = Corticosteroid) %>%
         select(Naive, Anti.IL1, Corticosteroid, Corticosteroid2, Anti.IL12, selected_comb)
     blocks <- list.map(seq(length(blocks) / 2), f(i) ~ filter(blocks, blocks[, i + length(blocks) / 2] == TRUE) %>% select(i)) %>% setNames(selected_comb)
     blocks[[1]] <- mutate(blocks[[1]], Naive = ifelse(Naive == 1, 0, 1))
@@ -286,7 +286,7 @@ top_genes <- list(
     c("FAM13A"),
     c("KBTBD11", "TNF", "LIPA", "RAD52", "HCN3"),
     c("FCGR1A", "HIF1A", "ICAM1", "SOD2", "TNFAIP6", "CD3D", "CD3E", "CD3G", "CD8A", "LCK"),
-    c("BCL6", "IL1", "IL10", "VEGFA")
+    c("BCL6", "IL10", "VEGFA")
 )
 list.map(l_de2, f(i, k, j) ~ i %>%
     volcano_plot(top_genes = filter(i, name %in% top_genes[[k]]), cex = 3, legend = "none") + xlab("") + ylab("")) -> p2
@@ -501,8 +501,9 @@ list.map(dbs, f(j) ~ list.filter(tmp0, f(i) ~ !is.null(i[[j]])) %>% list.names()
 ```{r}
 blocks1 <- blocks
 # blocks2 <- list.map(seq(length(blocks1)), f(i) ~ select(counts_matrix, rownames(blocks[[i]])) %>% filter(rownames(.) %in% head(de_genes0[[i]], 10)))
-blocks2 <- list.map(seq(length(blocks1)), f(i) ~ select(counts_matrix, rownames(blocks[[i]])) %>% filter(rownames(.) %in% sapply(de_genes[[i]], function(x) head(x, 10)) %>% unlist()))
-i <- 3
+# blocks2 <- list.map(seq(length(blocks1)), f(i) ~ select(counts_matrix, rownames(blocks[[i]])) %>% filter(rownames(.) %in% sapply(de_genes[[i]], function(x) head(x, 10)) %>% unlist()))
+blocks2 <- list.map(top_genes, f(i, j) ~ list.map(i, f(x) ~ plotCounts(l_de0[[j]], gene = x, intgroup = "group", returnData = TRUE) %>% select(-group) %>% set_colnames(x)) %>% Reduce(cbind, .) %>% t()) 
+i <- 1
 # names_levels <- c("AOSD", "SOJIA")
 names_levels <- c("0", "1")
 # names_levels <- c("Naive", "GC-Corticoid", "GC-Corticoid + aIL1", "aIL1 only")
@@ -511,7 +512,7 @@ disease <- ifelse(blocks1[[i]] == 0, names_levels[1], names_levels[2]) %>% set_c
 row_annotation <- data.frame(Treatment = disease)
 # row_annotation[1, ] <- "GC-Corticoid + aIL1"
 # row_annotation[2, ] <- "aIL1 only"
-res_scaled <- blocks <- t(blocks2)
+res_scaled <- blocks <- t(blocks2[[i]])
 res_scaled_na <- scale0(blocks, "minmax")
 
 disease <- ifelse(blocks1[[2]] == 0, names_levels[1], names_levels[2]) %>% set_colnames("Treatment")
@@ -584,6 +585,7 @@ kegg_genes <- list.map(de_genes_ranked, f(i) ~ {
         set_names(pull(tmp, ENTREZID)) %>%
         sort(decreasing = TRUE)
 })
+sapply(kegg_genes, length)
 
 tmp <- list.map(kegg_genes, f(i) ~ gseKEGG(
     geneList = i,
