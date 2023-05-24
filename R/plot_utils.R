@@ -392,17 +392,17 @@ get_top <- function(res, fc_threshold = 1, p_threshold = 0.05, n = 1000) {
 
 get_top0 <- function(res, fc_threshold = 0.5, p_threshold = 0.05, n = 1000, rank = FALSE) {
     temp <- res %>%
-        mutate(
+      mutate(
             rank_p = rank(desc(log10p)),
             rank_fc = rank(desc(abs(log2FoldChange))),
             pfc = log10p * log2fc,
+            rank = rank(rank_p + rank_fc)
         ) %>%
-        mutate(rank = rank(rank_p + rank_fc)) %>%
-        arrange(rank) %>%
+        dplyr::arrange(desc(abs(pfc))) %>%
         filter(abs(log2FoldChange) >= fc_threshold & padj <= p_threshold) %>%
         head(n)
     if (!rank) {
-          temp <- dplyr::select(temp, -c(rank, rank_p, rank_fc))
+          temp <- dplyr::select(temp, -c(pfc, contains("rank")))
       }
     return(temp)
 }
@@ -576,6 +576,34 @@ cnetplot0 <- function(
   # }
 }
 
+get_enrich_genes <- function(x, type = "kegg") {
+  if (is(x[[1]], "gseaResult")){
+    var_gene <- "core_enrichment"
+  } else {
+    var_gene <- "geneID"
+  }
+  if (type == "go") {
+    key <- "ENSEMBL"
+  } else {
+    key <- "ENTREZID"
+  }
+  list.map(
+    x,
+    f(j) ~ {
+      as.tibble(j) %>%
+        pull(var_gene) %>%
+        str_split("/") %>%
+        pluck(1) %>%
+        bitr(
+          fromType = key,
+          toType = "SYMBOL",
+          OrgDb = get(organism)
+        ) %>%
+        pull("SYMBOL") %>%
+        sort()
+    })
+}
+
 heatplot0 <- function(x, foldChange, n = 15, wrap = 50) {
   heatplot(
     x,
@@ -583,6 +611,54 @@ heatplot0 <- function(x, foldChange, n = 15, wrap = 50) {
     foldChange = foldChange,
     label_format = function(x) str_trunc(x, wrap) %>% to_title()
   )
+}
+
+get_kegg_path <- function(x, query) {
+  if (is(x[[1]], "gseaResult")) {
+    gen_col <- "core_enrichment"
+    x <- list(x)
+  } else {
+    gen_col <- "geneID"
+  }
+
+  list.map(x, list.map(., f(j) ~ as.tibble(j) %>% filter(str_detect(Description,  query)) %>% pull(ID))) %>% unlist() %>% unique() -> name
+  list.map(x, list.map(., f(j) ~ as.tibble(j) %>% filter(str_detect(Description,  query)) %>% pull(Description))) %>% unlist() %>% unique() %>% c(name) %>% print()
+  res <- list.map(x, list.map(., f(j) ~ as.tibble(j) %>% filter(str_detect(Description, query)) %>% pull(gen_col) %>% str_split("/") %>% pluck(1)) %>% compact())
+
+  if (is(x[[1]][[1]], "gseaResult")) {
+    res <- get_intersection0(res[[1]])
+  } else {
+    res <- get_intersection0(c(res[[1]], res[[2]]))
+  }
+  res0 <- list.map(res, f(i, j) ~ data.frame(id = i, col = get_colors()[-c(12, 15:16)][j + 9])) %>% list.rbind()
+
+  save_tsv(res0, paste0(name, ".tsv"), cwd = cwd)
+  browseKEGG(x[[1]][[1]], name)
+
+  df <- names(res) %>% str_replace_all(":", " / ") %>% #str_wrap(30) %>%
+    data.frame(id = ., col = get_colors()[-c(3, 6:7)][seq_along(.)])
+  ggplot(df, aes(x = 1, y = id, label = str_wrap(id, 40), color = col)) +
+    geom_text(size = 10, hjust = 0) +
+    scale_color_manual(values = df$col) +
+    theme_void() +
+    theme(legend.position = "none")
+}
+
+get_genes_path <- function(x, query) {
+  list.map(
+    query,
+    f(i) ~ {
+      list.map(
+        x,
+        f(j) ~ {
+          as.data.frame(j) %>%
+            filter(Adjusted.P.value <= 0.05) %>%
+            filter(str_detect(Term, paste0("^", i) %>% str_remove_all("\\.\\.\\.$"))) %>%
+            pull(Term) # %>%
+          # str_split(";")
+        }) %>% unlist() %>% unname()
+    }
+  ) %>% compact()
 }
 
 tree_plot <- function(x, ratio = ratio, wrap = 20, n = 50) {
