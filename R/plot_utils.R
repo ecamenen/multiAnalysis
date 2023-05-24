@@ -529,3 +529,71 @@ chi_plot <- function(
       )
     )
 }
+
+cnetplot0 <- function(
+    x,
+    highlighted = NULL,
+    col_highlight = get_colors()[1],
+    showCategory = 3,
+    foldChange  = NULL,
+    cex = 0.7,
+    wrap = 20,
+    n = 5,
+    node_label = "all"
+) {
+  # foldChange = rep(1, length(highlighted))
+  # names(foldChange) <- highlighted
+
+  if (is(x, "compareClusterResult")) {
+    x@compareClusterResult$Description <- to_title(x@compareClusterResult$Description) %>%
+      str_trunc(50) %>% str_wrap(wrap)
+  }
+  p <- cnetplot(
+    x,
+    node_label = node_label,
+    cex.params = list(category_label = 1.2 * cex, gene_label = 1 * cex),
+    color.params = list(foldChange = foldChange, category = "gray50"),
+    shadowtext = "none",
+    showCategory = n
+  )
+  if (is(x, "compareClusterResult")) {
+    p +
+      scale_fill_manual(
+        values = get_colors()[seq_along(x@geneClusters)],
+        name = ""
+      ) +
+      guides(color = "none")
+  } else {
+    p +
+      scale_color_gradientn(colours = colors_ind, name = "FDR") +
+      theme(legend.position = "right")
+  }
+  # p$data$name <- to_title(p$data$name)
+  # if (!is.null(highlighted)) {
+  #   highlighted0 <- p$data$name %in% highlighted
+  #   p$data$alpha[!highlighted0] <- 0
+  #   p$data$color[highlighted0] <- get_colors()[1]
+  # }
+}
+
+heatplot0 <- function(x, foldChange, n = 15, wrap = 50) {
+  heatplot(
+    x,
+    showCategory = 15,
+    foldChange = foldChange,
+    label_format = function(x) str_trunc(x, wrap) %>% to_title()
+  )
+}
+
+tree_plot <- function(x, ratio = ratio, wrap = 20, n = 50) {
+  # if (is(x, "compareClusterResult")) {
+  #   x@compareClusterResult$Description <- to_title(x@compareClusterResult$Description) %>%
+  #     str_trunc(wrap)
+  # }
+  enrichplot::pairwise_termsim(x) %>%
+    treeplot(showCategory = 50, offset.params = list(extend = ratio)) # +
+  # scale_fill_gradientn(
+  #   name = "FDR",
+  #   colours = c(get_colors()[1], "gray50", get_colors()[2])
+  # )
+}
