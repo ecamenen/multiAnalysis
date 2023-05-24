@@ -234,26 +234,29 @@ get_gene_term <- function(x) {
 }
 
 #' @export
-plot_enrich <- function(x, n = 20, title = NULL, gsea = FALSE, cex = 1, ratio = 5) {
-    df <- arrange(x, Adjusted.P.value) %>%
-        head(n) %>%
-        mutate(
-            label = {
-                str_remove_all(Term, "\\(.*") %>%
-                    str_remove_all("((ORPHA)|(WP)|(HSA)|(R-)).*") %>%
-                    str_trunc(50) -> temp
-                paste0(toupper(substr(temp, 1, 1)), substr(temp, 2, nchar(temp)))
-            },
-            rank = n + 1 - row_number(Adjusted.P.value)
+plot_enrich <- function(x, n = 20, title = NULL, type = "go", cex = 1, ratio = 5, wrap = 50) {
+    if (type == "gsea") {
+      df <- mutate(
+            x,
+            Adjusted.P.value = p.adjust,
+            Term = str_to_title(Description),
+            Count = setSize,
+            Overlap = core_enrichment,
+            generatio = str_split(Overlap, "/") %>% sapply(length) / setSize
         )
-    if (gsea) {
-        df <- mutate(
-            df,
-            generatio = str_split(Overlap, "/") %>% sapply(length)
-        )
+    } else if (type == "kegg") {
+      df <- mutate(
+        x,
+        Adjusted.P.value = p.adjust,
+        Term = str_to_title(Description),
+        Count = str_split(GeneRatio, "/") %>%
+          sapply(function(i) as.numeric(i[1])),
+        generatio = str_split(GeneRatio, "/") %>%
+          sapply(function(i) as.numeric(i[1]) / as.numeric(i[2]))
+      )
     } else {
         df <- mutate(
-            df,
+            x,
             Count = str_remove_all(Overlap, "\\/.*") %>% as.numeric(),
             generatio = {
                 str_split(Overlap, "/") %>%
@@ -261,27 +264,62 @@ plot_enrich <- function(x, n = 20, title = NULL, gsea = FALSE, cex = 1, ratio = 
             }
         )
     }
-    ggplot(df, aes(generatio, rank)) +
+    df0 <- filter(df, Adjusted.P.value <= 0.05)
+    if (nrow(df0) < n)
+      df0 <- df
+    df <- arrange(df0, desc(generatio)) %>%
+      head(n) %>%
+      mutate(
+        label = {
+          str_remove_all(Term, "\\(.*") %>%
+            str_remove_all("((ORPHA)|(WP)|(HSA)|(R-)).*") %>%
+            str_trunc(wrap) %>%
+            to_title()
+        },
+        rank = row_number(generatio)
+      )
+    colour_x <- ifelse(df$Adjusted.P.value <= 0.05, get_colors()[1], "gray50")
+    p <- ggplot(df, aes(generatio, rank)) +
         geom_point(aes(color = Adjusted.P.value, size = Count)) +
         scale_size(range = c(0.5, 12), name = "Gene count") +
-        theme_minimal() %>%
-        theme_perso0(cex * 1.2) +
         labs(title = title, x = "Gene ratio", y = "") +
-        theme(
-            axis.ticks.y = element_blank(),
-            axis.text.y = element_text(
-                size = 16 * cex,
-                colour = ifelse(df$Adjusted.P.value <= 0.05, get_colors()[1], "gray")
-            )
-        ) +
-        scale_color_gradientn(
-            # labels = label_pvalue(),
-            # breaks = breaks_width(width = 5, offset = 0),
-            name = "FDR",
-            colours = c(get_colors()[1], "gray", get_colors()[2])
-        ) +
-        scale_y_continuous(breaks = df$rank, labels = df$label) +
-        expand_limits(y = max(df$generatio) + max(df$generatio) / ratio)
+      scale_y_continuous(breaks = df$rank, labels = df$label)
+      theme_enrich(p, cex, colour = colour_x) #+
+        # expand_limits(y = max(df$generatio) + max(df$generatio) / ratio)
+}
+
+plot_enrich_gsea <- function(x, n = 15, cex = 0.7, wrap = 50, colour = "gray50") {
+  if (is(x, "compareClusterResult")) {
+    x@compareClusterResult$Cluster <- x@compareClusterResult$Cluster %>%
+      str_trunc(50) %>% str_wrap(20)
+  }
+  dotplot(
+    x,
+    showCategory = n,
+    label_format = function(x) str_trunc(x, wrap) %>% to_title(),
+
+    ) %>%
+    theme_enrich(cex = cex, colour) +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1, colour = colour)) +
+    xlab("")
+}
+
+theme_enrich <- function(p, cex = 1, colour = "gray50") {
+  p + theme_minimal() %>%
+    theme_perso0(cex * 1.5) +
+    theme(
+      axis.ticks.y = element_blank(),
+      axis.text.y = element_text(
+        size = 16 * cex,
+        colour = colour
+      )
+    ) +
+    scale_color_gradientn(
+      # labels = label_pvalue(),
+      # breaks = breaks_width(width = 5, offset = 0),
+      name = "FDR",
+      colours = c(get_colors()[1], "gray50", get_colors()[2])
+    )
 }
 
 #' @export
