@@ -1,0 +1,97 @@
+---
+title: "QC"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{QC}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+```{r setup}
+library(multiAnalysis)
+set.seed(1)
+
+plot_dimred <- function(coord, axis) {
+  coord <- as.data.frame(coord) %>% set_colnames(c("x", "y")) %>% mutate(batch = batch)
+  ggplot(coord, aes(x = x, y = y, color = batch)) +
+    geom_hline(yintercept = 0, size = .5, color = "gray70") +
+    geom_vline(xintercept = 0, size = .5, color = "gray70") +
+    geom_point(alpha = 0.5) +
+    labs(x = axis[1], y = axis[2], color = "Batch") +
+    scale_color_manual(values = brewer.pal(n = length(levels(pull(coord, batch))), name = "Set1")) +
+    theme_minimal() +
+    theme(
+        axis.title = element_text(size = 15, face = "bold.italic", color = "gray50"),
+        legend.title = element_text(size = 15, face = "bold.italic", color = "gray50"),
+        axis.text = element_text(size = 13, color = "gray50"),
+        legend.text = element_text(size = 13, color = "gray50")
+    ) +
+    guides(color = guide_legend(override.aes = list(shape = 15, size = 4)))
+}
+```
+
+```{r}
+path <- golem::get_golem_wd()
+cwd <- file.path(path, "inst", "extdata")
+raw_counts <- read_tsv(file.path(cwd, "gene_counts.tsv")) %>% column_to_rownames("GeneName")
+batch <- read_tsv(file.path(cwd, "batch_rna.tsv")) %>% mutate(Sample = paste0(Sample, "05PB1"), batch = as.factor(batch))
+batch <- data.frame(Sample = colnames(raw_counts)) %>% full_join(batch, by = "Sample") %>% column_to_rownames("Sample") %>% pull(batch)
+```
+
+```{r umap}
+# combat_counts <- as.matrix(raw_counts) %>%
+#     ComBat_seq(batch) %>%
+#     as.data.frame()
+norm_rna <- round(raw_counts) %>% as.matrix() %>% vst()
+colnames(norm_rna) <- colnames(norm_rna) %>% str_remove_all("05PB1")
+res <- umap(t(norm_rna))
+```
+
+```{r}
+axis <- paste0("Dim.", seq(ncomp)
+coord <- as.data.frame(res_pca$ind$coord) %>% mutate(batch = batch)
+plot_dimred(res$layout, axis)
+```
+
+```{r pca}
+ncomp <- 2
+res_pca <- PCA(t(norm_rna), scale.unit = FALSE, ncp = ncomp, graph = FALSE)
+plot_dimred(res_pca$ind$coord, axis)
+```
+
+```{r umap}
+hc_metric <- "spearman"
+res_dist <- get_dist(t(norm_rna), stand = FALSE, method = hc_metric)
+mds <- cmdscale(res_dist, k = ncomp, eig = TRUE)
+coord <- as_tibble(mds$points)
+eig <- (mds$eig / sum(mds$eig[mds$eig > 0]) * 100)
+axis <- paste0(axis, " (", paste(round(eig[seq(2)], 1), "%)"))
+plot_dimred(coord, axis)
+```
+
+```{r som}
+res_som <- som(
+    t(norm_rna),
+    grid = som_grid,
+    rlen = 1000
+)
+
+plot(
+    som_model,
+    cex = 0.8,
+    type = "mapping",
+    labels = colnames(norm_rna),
+    col = col_grp(x = batch),
+    bg = "white",
+    shape = "straight",
+    border = "gray50"
+)
+```
+
