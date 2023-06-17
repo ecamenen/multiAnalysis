@@ -1,0 +1,427 @@
+---
+title: "QC_Counts"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{QC_Counts}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+```{r setup}
+path <- getwd()
+gene_counts <- read_tsv(file.path(path, "gene_counts_batch4.tsv")) %>% 
+  rename(ensembl_gene_id = gene_id)
+gene_counts_norm <- round(gene_counts[, -1]) %>%
+  as.matrix() %>%
+  vst() %>%
+  as_tibble() %>%
+  mutate(ensembl_gene_id = gene_counts$ensembl_gene_id) %>%
+  relocate(ensembl_gene_id)
+
+# db_annot <- useEnsembl(biomart = "genes", dataset = "hsapiens_gene_ensembl", version = 104)
+gene_query <- getBM(
+  attributes = c("ensembl_gene_id", "hgnc_symbol", "chromosome_name", "transcript_biotype", "description", "wikigene_description", "ensembl_peptide_id", "strand"),
+  filters = c("ensembl_gene_id"),
+  values = list(pull(gene_counts, 1)),
+  mart = db_annot
+)
+# write_tsv(gene_query, file = file.path(path, "gene_query.tsv"))
+gene_query <- read_tsv(file.path(path, "gene_query.tsv"))
+
+metadata <- inner_join(gene_counts_norm, gene_query, by = "ensembl_gene_id")
+
+x <- "chromosome_name"; filter(metadata, !str_detect(!!sym(x), "CHR_")) %>% pull(!!sym(x)) %>% unique()
+
+metadata0 <- metadata %>%
+  group_by(ensembl_gene_id) %>%
+  dplyr::slice(1) %>%
+  ungroup()
+
+df0 <- pivot_longer(metadata0, cols = ends_with("05PB1"), names_to = "Sample", values_to = "Count")
+arrange(df0, desc(Count)) %>% print(n = 30)
+
+# Plot chromosomes
+df1 <- filter(df0, chromosome_name %in% c(seq(22), "MT", "Y", "X")) %>%
+  mutate(chromosome_name = gsub("^(\\d{1})$", "0\\1", chromosome_name))
+p <- ggplot(df1, aes(x = as.factor(chromosome_name), y = Count, color = Sample, group = Sample)) +
+  geom_point(position = position_jitter(width = 0.2, height = 0)) +
+  # geom_boxplot(width = 0.5, alpha = 0.6, outlier.shape = NA) +
+  labs(x = "Chromosome", y = "# Reads") +
+  theme_minimal() +
+  theme(
+    axis.title = element_text(size = 15, face = "bold.italic", color = "gray50"),
+    panel.grid.major.x = element_blank(),
+    axis.text = element_text(size = 13, color = "gray50"),
+    legend.position = "none"
+  ) +
+  scale_y_continuous(labels = label_number_auto())
+  # scale_color_manual(values = get_colors0()(119)) 
+p
+
+# Plot genes
+df11 <- pivot_longer(gene_counts_norm, cols = ends_with("05PB1"), names_to = "Sample", values_to = "Count")
+ggplot(df11 %>% filter(Count > min(gene_counts_norm[, -1])) %>% filter(Sample == "01015A05PB1"), aes(x = Count, color = Sample)) +
+  stat_density(geom = "line", size = 1) +
+  labs(x = "# Reads", y = "Density") +
+  theme_minimal() +
+  theme(
+    axis.title = element_text(size = 15, face = "bold.italic", color = "gray50"),
+    axis.text = element_text(size = 13, color = "gray50"),
+    axis.text.x = element_text(angle = 45),
+    legend.position = "none"
+  ) +
+  scale_color_manual(values = get_colors0()(ncol(gene_counts))) +
+  scale_x_continuous(
+    # trans = log10_trans(),
+    # breaks = c(1, paste0("1e", seq(7))) %>% as.numeric(),
+    labels = label_number_auto()#, 
+    # limits = c(1, NA)
+  ) +
+  scale_y_continuous(label = label_number(suffix = "%"))
+
+gene_counts0 <- mutate(gene_counts_norm, median = apply(gene_counts_norm[, -1], 1, median))
+df00 <- pivot_longer(gene_counts0, cols = c(ends_with("05PB1"), "median"), names_to = "Sample", values_to = "Count")
+ggplot(df00 %>% filter(Count >= 1), aes(x = Count, color = Sample)) +
+  geom_line(stat = "bin", binwidth = 1) +
+  theme_minimal() +
+  labs(x = "# Reads", y = "Frequency") +
+  theme_minimal() +
+  theme(
+    axis.title = element_text(size = 15, face = "bold.italic", color = "gray50"),
+    axis.text = element_text(size = 13, color = "gray50"),
+    axis.text.x = element_text(angle = 45),
+    legend.position = "none"
+  ) +
+  scale_color_manual(values = c("red", rep("gray80", 119)), breaks = c("median", unique(df00$Sample)[unique(df00$Sample) != "median"])) +
+  scale_x_continuous(
+    trans = log10_trans(),
+    breaks = c(1, paste0("1e", seq(7))) %>% as.numeric(),
+    labels = label_number_auto(),
+    limits = c(1, NA)
+  ) +
+  scale_y_continuous(label = label_number_auto())
+
+ggplot(df00 %>% filter(Count > min(gene_counts_norm[, -1])), aes(x = Count, color = Sample)) +
+  geom_line(stat = "bin", binwidth = 1) +
+  theme_minimal() +
+  labs(x = "# Reads", y = "Frequency") +
+  theme_minimal() +
+  theme(
+    axis.title = element_text(size = 15, face = "bold.italic", color = "gray50"),
+    axis.text = element_text(size = 13, color = "gray50"),
+    axis.text.x = element_text(angle = 45),
+    legend.position = "none"
+  ) +
+  scale_color_manual(values = c("red", rep("gray80", 119)), breaks = c("median", unique(df00$Sample)[unique(df00$Sample) != "median"])) +
+  scale_x_continuous(
+    labels = label_number_auto()
+  ) +
+  scale_y_continuous(label = label_number_auto())
+
+# gene_counts0 <- mutate(gene_counts, median = apply(gene_counts[, -1], 1, mean))
+# df1 <- pivot_longer(gene_counts0, cols = c(ends_with("05PB1"), "median"), names_to = "Sample", values_to = "Count")
+# ggplot(df1 %>% filter(Count >= 1), aes(x = Count, color = Sample)) +
+#   stat_density(geom = "line", size = 1)  +
+#   labs(x = "# Reads", y = "Density") +
+#   theme_minimal() +
+#   theme(
+#     axis.title = element_text(size = 15, face = "bold.italic", color = "gray50"),
+#     axis.text = element_text(size = 13, color = "gray50"),
+#     axis.text.x = element_text(angle = 45),
+#     legend.position = "none"
+#   ) +
+#   # scale_color_manual(values = get_colors0()(119)) +
+#   scale_color_manual(values = c("red", rep("gray80", 119)), breaks = c("median", unique(df1$Sample)[unique(df1$Sample) != "median"])) +
+#   scale_x_continuous(trans = log2_trans(), breaks = c(1, paste0("1e", seq(7))) %>% as.numeric(), labels = label_number_auto(), limits = c()) +
+#   # scale_x_continuous(trans = log2_trans(), breaks = trans_breaks("log2", function(x) round(2^x)), labels = label_number_auto()) +
+#   scale_y_continuous(label = label_number(suffix = "%"))
+###
+
+
+plot_dispersion <- function(x) {
+  df <- data.frame(Sample = rownames(x), x)
+  colnames(df)[-1] <- colnames(x)
+  
+  medians <- apply(df[, -1], 2, function(x) median(x, na.rm = TRUE))
+  iqrs <- apply(df[, -1], 2, function(x) IQR(x, na.rm = TRUE))
+  
+  df0 <- pivot_longer(df, cols = -Sample, names_to = "gene", values_to = "value")
+  
+  
+  ggplot(df0, aes(x = gene, y = value)) +
+    # geom_pointrange(
+    #   aes(
+    #     y = medians[gene],
+    #     ymin = medians[gene] - 0.5 * iqrs[gene],
+    #     ymax = medians[gene] + 0.5 * iqrs[gene]
+    #   ),
+    #   size = .25,
+    #   shape = 3,
+    #   color = "gray50",
+    #   alpha = .5
+    # ) +
+  # geom_text(aes(label = gene)) +
+    geom_point(size = .25, alpha = 0.5, color = "gray50") +
+    labs(x = "Genes", y = "# Reads", color = "Samples") +
+    theme_minimal() +
+    theme(
+      axis.title = element_text(size = 15, face = "bold.italic", color = "gray50"),
+      panel.grid.major.x = element_blank(),
+      axis.text.x = element_blank()
+    ) +
+    scale_y_continuous(labels = label_number_auto())
+}
+
+counts0 <- t(gene_counts_norm[, -1]) %>% set_colnames(pull(gene_counts, 1))
+
+plot_dispersion(counts0)
+
+plot_dispersion <- function(x) {
+  df <- data.frame(Sample = rownames(x), x)
+  colnames(df)[-1] <- colnames(x)
+  
+  medians <- apply(df[, -1], 2, function(x) median(x[x >= 1], na.rm = TRUE))
+  iqrs <- apply(df[, -1], 2, function(x) IQR(x[x >= 1], na.rm = TRUE))
+  
+  df0 <- pivot_longer(df, cols = -Sample, names_to = "gene", values_to = "value") %>%
+    # filter(value >= 1) %>%
+    mutate(value = round(value))
+  colors <- get_colors0()(ncol(df) - 1)
+  
+  ggplot(df0, aes(x = gene, y = value, color = gene)) +
+    geom_pointrange(
+      aes(
+        y = medians[gene],
+        ymin = medians[gene] - 0.5 * iqrs[gene],
+        ymax = medians[gene] + 0.5 * iqrs[gene],
+        color = gene
+      ),
+      size = .5,
+      shape = 3,
+      alpha = .5
+    ) +
+    # geom_text(aes(label = gene)) +
+    geom_point(size = 1, alpha = 0.5) +
+    labs(x = "Samples", y = "# Reads", color = "Samples") +
+    theme_minimal() +
+    theme(
+      axis.title = element_text(size = 22, face = "bold.italic", color = "gray50"),
+      panel.grid.major.x = element_blank(),
+      # axis.text.x = element_blank(),
+      axis.text.y = element_text(size = 13),
+      axis.text.x = element_text(angle = 90, color = colors, size = 10),
+      legend.position = "none"
+    ) +
+    scale_y_continuous(
+      # trans = log10_trans(),
+      # breaks = c(1, paste0("1e", seq(7))) %>% as.numeric(),
+      labels = label_number_auto()
+    ) +
+    scale_color_manual(values = colors)
+  # guides(x = guide_axis(n.dodge = 3))
+}
+
+png(
+  file.path(path, paste0("dispersion", ".temp.", "png")),
+  units = "px",
+  width = 1200*4,
+  height = 575*4,
+  res = 300
+)
+gene_counts_norm[, -1] %>% set_colnames(colnames(.) %>% str_remove_all("05PB1")) %>% plot_dispersion()
+dev.off()
+
+clinic <- read_tsv(file.path(path, "clinic.tsv"))
+gender <- select(clinic, c("C_2643_3796", "C_2649_3888")) %>%
+  set_colnames(c("Sample", "gender")) %>%
+  filter(!is.na(gender))
+rna <- t(select(metadata0, ends_with("05PB1"))) %>% 
+  as.data.frame() %>%
+  set_colnames(pull(metadata0, "ensembl_gene_id")) %>%
+  round()
+rownames(rna) <- rownames(rna) %>% str_remove_all("05PB1")
+
+g_gender <- c("DDX3Y", "XIST")
+query <- sapply(
+  g_gender,
+  function(x)
+    filter(metadata0, hgnc_symbol == x) %>%
+    pull(ensembl_gene_id)
+)
+
+rna_gender <- select(rna, query) %>%
+  mutate(ID = rownames(.), Sample = rownames(.) %>% str_remove_all("[AB]$")) %>%
+  inner_join(gender, by = "Sample")
+
+list.map(
+  names(query), 
+  f(x, y) ~ {
+    select(rna_gender, c(x, "gender")) %>%
+    group_by(gender) %>%
+    group_split() %>%
+    as.list() %>%
+    list.map(f(i) ~ pull(i, x)) %>%
+    list_cbind() %>%
+    round() %>%
+    set_colnames(unique(pull(rna_gender, "gender"))) %>%
+    plot_violin0(
+      wrap = 5,
+      wrap_title = 20,
+      colour = brewer.pal(10, "Paired")[seq(2) + 2 * y],
+      stat = TRUE,
+      title = x
+    ) +
+    scale_y_continuous(
+      trans = log10_trans(),
+      breaks = c(1, paste0("1e", seq(6))) %>% as.numeric(),
+      labels = label_number_auto()
+    )
+  }
+) %>%
+plot_grid(
+  plotlist = .,
+  nrow = 1,
+  ncol = 2,
+  align = "hv"
+)
+
+pull(metadata, transcript_biotype) %>% fct_count() %>% arrange(desc(n)) %>% mutate(perc = n / nrow(metadata) *100) %>% View()
+select(metadata, -c(ends_with("05PB1"))) %>% filter(ensembl_gene_id %in% cou0)
+
+pull(metadata, transcript_biotype) %>% str_replace_all(".*(pseudogene)", "\\1") %>% str_replace_all("(IG)_.*", "\\1") %>% str_replace_all("(TR)_.*", "\\1") %>% str_replace_all(".*(decay)", "\\1") %>% str_replace_all("(misc_RNA)|(snRNA)|(miRNA)|(snoRNA)|(scaRNA)|(sRNA)|(scRNA)|(vault_RNA)|(Mt_ncRNA)|(Mt_tRNA)", "sRNA") %>% str_replace_all("Mt_rRNA", "rRNA") %>% str_replace_all("retained_intron", "lncRNA") %>% str_replace_all("(IG)|(TR)", "somatic recombination") %>% str_replace_all("(somatic recombination)|(TEC)|(rRNA)|(ribozyme)", "Others")  %>% str_replace_all("(lncRNA)|(sRNA)", "processed_transcript") %>% fct_count() %>% arrange(desc(n)) %>% mutate(perc = n / nrow(metadata) *100) %>% View()
+
+perc_type <- function(x, val = "A", col = "biotype") {
+  select(x, ends_with("05PB1")) %>%
+    apply(
+      2, 
+      function(i) {
+        prop <- sum(str_detect(pull(x, col), val) & i >= 1) / sum(i >= 1) * 100
+        ifelse(is.nan(prop), 0, prop)
+      }
+    )
+}
+
+biotype <- pull(metadata, transcript_biotype) %>% 
+  str_replace_all(".*(pseudogene)", "Pseudogene") %>%
+  str_replace_all("(IG)_.*", "\\1") %>%
+  str_replace_all("(TR)_.*", "\\1") %>%
+  str_replace_all(".*(decay)", "Decayed") %>%
+  str_replace_all("(misc_RNA)|(snRNA)|(miRNA)|(snoRNA)|(scaRNA)|(sRNA)|(scRNA)|(vault_RNA)|(Mt_ncRNA)|(Mt_tRNA)", "sncRNA") %>%
+  str_replace_all("Mt_rRNA", "rRNA") %>% 
+  # str_replace_all("retained_intron", "lncRNA") %>% 
+  str_replace_all("(IG)|(TR)", "somatic recombination") %>% 
+  # str_replace_all("(somatic recombination)|(TEC)|(rRNA)|(ribozyme)", "Others") %>% 
+  str_replace_all("protein_coding", "CDS") %>%
+  str_replace_all("processed_transcript", "ncRNA")
+
+p <- list.map(
+  c("CDS", "Pseudogene", "rRNA", "lncRNA", "sncRNA"),
+  f(x, y) ~ {
+case_when(str_detect(biotype, x) ~ "A", TRUE ~ "B") %>%
+  mutate(metadata, biotype = .) %>%
+  group_by(ensembl_gene_id) %>%
+  arrange(biotype) %>%
+  slice(1) %>%
+  ungroup() %>%
+  perc_type() %>%
+  plotHistogram(
+    df = ., 
+    title = paste("%", x),
+    n = 10, 
+    dec = 1, 
+    color_title = brewer.pal(9, "Set1")[y], 
+    color_gradient = c("gray", brewer.pal(9, "Set1")[y])
+  )
+  # plot_violin0(
+  #   title = paste("%", x),
+  #   cex_main = 19,
+  #   cex_sub = 13,
+  #   pch_alpha = .5,
+  #   pch_col = "gray20",
+  #   colour = brewer.pal(9, "Set1")[y]
+  #   ) + 
+  # scale_y_continuous(label = label_number(suffix = "%"))
+  }
+)
+p2 <- perc_type(metadata0, val = "MT", col = "chromosome_name") %>%
+  plotHistogram(
+    df = ., 
+    title = "% MT",
+    n = 10, 
+    dec = 1, 
+    color_title = brewer.pal(9, "Set1")[8], 
+    color_gradient = c("gray", brewer.pal(9, "Set1")[8])
+  )
+  plot_violin0(
+    title = "% MT",
+    cex_main = 19,
+    cex_sub = 13,
+    pch_alpha = .5,
+    pch_col = "gray20",
+    colour = brewer.pal(9, "Set1")[8]
+  ) +
+  scale_y_continuous(label = label_number(suffix = "%"))
+  
+p3 <- case_when(pull(metadata, "strand") == "1" ~ "A", TRUE ~ "B") %>%
+    mutate(metadata, strand = .) %>%
+    group_by(ensembl_gene_id) %>%
+    arrange(strand) %>%
+    slice(1) %>%
+    ungroup() %>% 
+    perc_type(col = "strand") %>%
+    plot_violin0(
+      title = "% Strandness",
+      cex_main = 19,
+      cex_sub = 13,
+      pch_alpha = .5,
+      pch_col = "gray20",
+      colour = brewer.pal(8, "Set2")[6]
+    ) +
+    scale_y_continuous(label = label_number(suffix = "%"))
+
+p4 <- group_by(metadata, ensembl_gene_id) %>%
+  arrange(desc(ensembl_peptide_id)) %>%
+  slice(1) %>%
+  ungroup() %>% 
+  perc_type("ENSP", "ensembl_peptide_id") %>%
+  plot_violin0(
+    title = "% CDS",
+    cex_main = 19,
+    cex_sub = 13,
+    pch_alpha = .5,
+    pch_col = "gray20",
+    colour = brewer.pal(9, "Set1")[1]
+  ) +
+  scale_y_continuous(label = label_number(suffix = "%"))
+
+plot_grid(
+  plotlist = c(list(p4), p[-c(1, 5)], list(p2), list(p3)),
+  nrow = 1,
+  ncol = 6,
+  align = "hv"
+)
+
+# group_by(metadata, ensembl_exon_id) %>%
+#   arrange(desc(ensembl_exon_id)) %>%
+#   slice(1) %>%
+#   ungroup() %>%
+#   perc_type("ENSE", "ensembl_exon_id") %>%
+#   plot_violin0(
+#     title = "% Exon",
+#     cex_main = 19,
+#     cex_sub = 13,
+#     pch_alpha = .5,
+#     pch_col = "gray20",
+#     colour = brewer.pal(9, "Set1")[1]
+#   ) +
+#   scale_y_continuous(label = label_number(suffix = "%"))
+
+
+```
