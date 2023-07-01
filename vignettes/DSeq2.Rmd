@@ -19,15 +19,16 @@ knitr::opts_chunk$set(
 library(multiAnalysis)
 library(tximport)
 # library(rhdf5)
+cwd <- golem::get_golem_wd()
 # Load matrix for treatment
-set_analysis(block_name = "emna_treat", type = "qual")
+set_analysis(block_name = "emna_treat", type = "qual", cwd = cwd)
 # set_analysis(block_name = "still_manif", type = "qual")
 # Extract variable for discrimination
 
 load(file.path(path1, "clinic_transf.rda"))
 batches <- clinic_transf$batch %>% set_names(clinic_transf$immun_aid_identifier)
 
-load(file.path(path1, "clinic_transf.rda"))
+id_ctrl <- filter(clinic_transf, str_detect(disease, "control")) %>% pull(immun_aid_identifier)
 
 if (!file.exists(file.path(path_img, "shrinked"))) {
     dir.create(file.path(path_img, "shrinked"))
@@ -41,7 +42,7 @@ dbs <- c("GO_Molecular_Function_2021", "GO_Biological_Process_2021", "Orphanet_A
 # Load gene count data
 ```{r}
 # Load the count matrix
-path <- file.path(golem::get_golem_wd(), "inst", "extdata")
+path <- file.path(cwd, "inst", "extdata")
 processed_matrix <- read_tsv(file = file.path(path, "processed_gene_matrix.tsv"))
 counts_matrix <- read_delim(file = file.path(path, "raw_gene_matrix.txt"), delim = " ", skip = 1, col_names = colnames(processed_matrix))
 ```
@@ -137,13 +138,13 @@ l_visits <- list.map(
         set_colnames(l_visits[[i]], colnames(l_visits[[i]]) %>% str_replace_all(paste0("0?(\\d{4})(A|B)05PB1"), "\\1")) %>%
             select(c("GeneName", as.character(col_names[[i]])))
     }
-)
+) 
 # list.map(c("A", "B"), f(i) ~ l_visits[[i]] %>% select(intersect(colnames(.), rownames(blocks))) %>% ncol() %>% rep(i, .)) %>% unlist() %>% unname() %>% plot_piechart(cex = 30, hsize = 1.5, title = "", label = FALSE, colour = brewer.pal(9, "Paired")[7:8])
 counts_matrix <- l_visits[["A"]]
 gene_name <- str_remove_all(counts_matrix$GeneName, "\\.*")
 # Filter by common rows
 common_rows <- Reduce(intersect, list(colnames(counts_matrix), rownames(blocks), names(batches)))
-counts_matrix <- select(counts_matrix, -GeneName)
+counts_matrix <- list.cbind(l_visits) %>% select(-contains("GeneName"))
 
 blocks <- data.frame(blocks)[common_rows, ] %>% select(contains(c("Mucocutaneous", "Musculoskeletal", "Urticaria", "Myocarditis", "Anti.IL1", "Anti.IL6", "Corticosteroid", "DMARDs", "Kinase.Inhibitor", "Naive")))
 
@@ -300,14 +301,19 @@ counts_combat_HUGO <- ensembl_to_hugo(ensembl_hgnc, counts_combat)
 # setB <- select(counts_matrix, which(groups == 1) %>% names())
 # comparison <- cbind(setA, setB)
 # exprs_threshold <- 1 * NCOL(counts_matrix)
-filtered_counts <- counts_matrix[apply(select(counts_matrix, -ensembl_gene_id), 1, sum) > 10, ]
-ensembl_ids <- pull(filtered_counts, ensembl_gene_id)
-filtered_counts <- select(filtered_counts, -ensembl_gene_id) %>% round()
-l_de0 <- list.map(blocks, f(i) ~ {
+l_de0 <- list.map(blocks, f(i, j) ~ {
+  countData <- filtered_counts %>% select(colnames(.) %in% rownames(i) %>% which())
+  if (j < 5)
     DESeqDataSetFromMatrix(
-        countData = filtered_counts %>% select(colnames(.) %in% rownames(i) %>% which()),
-        colData = data.frame(group = pull(i, 1) %>% factor(), batch = batches[names(batches) %in% rownames(i)] %>% factor()),
+        countData = countData,
+        colData = i,
         design = ~ batch + group
+    ) %>% DESeq()
+  else
+    DESeqDataSetFromMatrix(
+        countData = countData,
+        colData = i,
+        design = ~ group
     ) %>% DESeq()
 })
 # results() %>%
