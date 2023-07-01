@@ -189,7 +189,7 @@ res_clus_var <- res_scaled %>%
 rownames(row_annotation) <- rownames(res_scaled)
 n <- seq(length(names_levels))
 row_col <- get_colors()[n]
-names(row_col) <- names_levels
+names(row_col) <- names_levels %>% sort() %>% rev()
 row_col0 <- as.character(factor(disease, labels = get_colors()[seq(n)]))
 
 fviz_dend(
@@ -201,8 +201,10 @@ fviz_dend(
     color_labels_by_k = TRUE,
 )
 
+t_scaled <- t(res_scaled)
+t_scaled[is.na(t_scaled)] <- 0
 res0 <- pvclust(
-    t(res_scaled),
+    t_scaled,
     method.hclust = hc_method,
     method.dist = "correlation",
     use.cor = "pairwise.complete.obs",
@@ -247,6 +249,7 @@ fviz_cluster(
 # Heatmap
 ```{r}
 row_dend <- color_dendrogram(res_clus, k = k, colors = colors_k) %>% sort()
+row_dend <- color_dendrogram(res_clus, k = 3, colors = colors_k) %>% sort()
 col_dend <- color_dendrogram(res_clus_var, k = 2, colors = c("#f03088", "#d9d52c")) %>% sort()
 
 heatmaply(
@@ -285,12 +288,12 @@ col_dend0 <- res_scaled %>%
 
 pheatmap(
     res_scaled_na,
-    color =  colorRampPalette(colors_ind)(100),
+    color = colorRampPalette(colors_ind)(100),
     angle_col = 315,
     na_col = "white",
     annotation_row = row_annotation,
     border_color = NA,
-    annotation_colors = list(Disease = row_col),
+    annotation_colors = list(Group = row_col),
     # annotation_col = my_sample_col,
     cluster_rows = row_dend0,
     cluster_cols = col_dend0,
