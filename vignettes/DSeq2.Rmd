@@ -37,6 +37,9 @@ if (!file.exists(file.path(path_img, "shrinked"))) {
 setEnrichrSite("Enrichr")
 # listEnrichrDbs()$libraryName[listEnrichrDbs()$libraryName %>% grepl("orphanet", ., ignore.case = TRUE)]
 dbs <- c("GO_Molecular_Function_2021", "GO_Biological_Process_2021", "Orphanet_Augmented_2021", "WikiPathway_2021_Human", "MSigDB_Hallmark_2020", "Reactome_2022")
+organism <- "org.Hs.eg.db"
+library(organism, character.only = TRUE)
+# keytypes(get(organism))
 ```
 
 # Load gene count data
@@ -500,49 +503,83 @@ filtered <- names(top_genes[[1]]) %>% str_detect("Naive") %>% which()
 
 # Enrichment analysis
 ```{r}
-enriched <- list.map(compact(de_genes1), f(i) ~ {
-    x <- i[[1]]
-    if (length(x) > 0) {
-        unlist(x) %>%
+enriched <- list.map(
+  c("Up-regulated", "Down-regulated"),
+  f(x) ~ {
+  list.map(
+    compact(de_genes1), 
+    f(j) ~ {
+    res <- j[[x]]
+    if (length(res) > 0) {
+        unlist(res) %>%
             head(250) %>%
             enrichr(dbs)
     }
+  })
 }) %>% compact()
-enriched0 <- list.map(compact(de_genes1), f(i) ~ {
-    x <- i[[2]]
-    if (length(x) > 0) {
-        unlist(x) %>%
-            head(250) %>%
-            enrichr(dbs)
-    }
-}) %>% compact()
+
 # enriched <- list.map(de_genes, f(i) ~ enrichr(i, dbs))
-list.map(enriched, f(x, y, z) ~ {
-    keep(x, function(a) nrow(a) > 0) %>%
-        list.map(f(i, j) ~ {
-            plot_enrich(i, n = 15, title = str_replace_all(dbs[j], "_", " "))
-        }) %>%
+list.map(
+  enriched, 
+  f(a, b, c) ~ {
+    list.map(
+      a,
+      f(x, y, z) ~ {
+    #   tiff(
+    #     file.path(path_img, paste0("enrichr_", z, "_", c, ".tiff")),
+    #     units = "px",
+    #     width = 8000,
+    #     height = 4000,
+    #     res = 300
+    # )
+    keep(x, function(i) nrow(i) > 0) %>%
+      list.map(
+        f(i, j, k) ~ {
+          plot_enrich(
+            i,
+            n = 15,
+            title = str_replace_all(dbs[k], "_", " "),
+            wrap = 45
+            )
+          }
+        ) %>%
         plot_grid(
             plotlist = .,
             nrow = 2,
             ncol = 3,
             align = "hv"
         ) %>%
-        save_tiff(file.path(path_img, "shrinked", paste0("enrichr_", z, "_skrinked")), 8000, 4000)
-})
+          plot_grid(
+            ggdraw() + draw_label(
+              paste0(z, " (", c,")"),
+              color = "#2F5496",
+              size = 50,
+              fontface = "bold.italic"
+              ),
+            .,
+            ncol = 1,
+            rel_heights = c(0.1, 1)
+          )
+    # dev.off()
+  })
+}) -> p
 
-# x <- 3
-# enriched0[[x]] %>%
-#     list.map(f(i, j) ~ {
-#         plot_enrich(i, n = 15, title = str_replace_all(dbs[j], "_", " "))
-#     }) %>%
-#     plot_grid(
-#         plotlist = .,
-#         nrow = 2,
-#         ncol = 3,
-#         align = "hv"
-#     ) %>%
-#     save_tiff(file.path(path_img, "shrinked", paste0("enrichr_", names(enriched)[x], "_down3")), 8000, 4000)
+# for (i in names(p)) {
+#   for (j in names(p[[i]])) {
+    # i <- names(p)[1]
+    # j <- names(p[[1]])[1]
+    # png(
+    #     file.path(path_img, paste0("enrichr_", j, "_", i, ".tiff")),
+    #     units = "px",
+    #     width = 8000,
+    #     height = 4000,
+    #     res = 300
+    # )
+    # p[[i]][[j]]
+    # dev.off()
+    # save_tiff(p[[i]][[j]], file.path(path_img, paste0("enrichr_", j, "_", i, ".tiff")), 8000, 4000)
+#   }
+# }
 
 # l_enrich <- list.map(de_genes, f(x) ~ enrichr(x, dbs))
 # p <- list.map(l_enrich, f(i, j, k) ~ plot_enrich(i[[5]], n = 15, title = str_replace_all(k, "\\.", "-")))
