@@ -69,15 +69,19 @@ cwd <- file.path(path, "inst", "extdata")
 raw_counts <- read_tsv(file.path(cwd, "gene_counts.tsv")) %>% column_to_rownames("GeneName")
 batch <- read_tsv(file.path(cwd, "batch_rna.tsv")) %>% mutate(Sample = paste0(Sample, "05PB1"), batch = as.factor(batch))
 batch <- data.frame(Sample = colnames(raw_counts)) %>% full_join(batch, by = "Sample") %>% column_to_rownames("Sample") %>% pull(batch)
+clinic <- read_tsv(file.path(cwd, "clinic.tsv")) %>% 
+  select(c("C_2643_3796", "C_2649_3888", "C_2649_3895", "C_2643_3803", "C_2649_3890")) %>%
+  set_colnames(c("Sample", "Gender", "Ethnicity", "Age", "BMI"))
 ```
 
-```{r umap}
-# combat_counts <- as.matrix(raw_counts) %>%
-#     ComBat_seq(batch) %>%
-#     as.data.frame()
-norm_rna <- round(raw_counts) %>% as.matrix() %>% vst()
+```{r data}
+combat_counts <- as.matrix(raw_counts) %>%
+    ComBat_seq(batch) %>%
+    as.data.frame()
+norm_rna <- round(combat_counts) %>% as.matrix() %>% vst()
 colnames(norm_rna) <- colnames(norm_rna) %>% str_remove_all("05PB1")
-res <- umap(t(norm_rna))
+ncomp <- 2
+axis <- paste0("Dim. ", seq(ncomp))
 ```
 
 ```{r}
