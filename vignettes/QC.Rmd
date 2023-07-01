@@ -156,17 +156,31 @@ mds$points[, 1] <- mds$points[, 1] * -1
 ```
 
 ```{r som}
+som_grid <- somgrid(
+    xdim = 3,
+    ydim = 3,
+    toroidal = TRUE,
+    topo = "hexagonal"
+)
 res_som <- som(
-    t(norm_rna),
+    t(norm_rna0),
     grid = som_grid,
     rlen = 1000
 )
 
+col_grp <- function(x = som_clusters, a = 1) {
+    x <- as.factor(x)
+    levels(x) <- get_colors()[seq(levels(x))]
+    return(as.vector(x))
+}
+
 plot(
-    som_model,
-    cex = 0.8,
+    res_som,
     type = "mapping",
+    cex = 0.8,
     labels = colnames(norm_rna),
+    # cex = 3
+    # labels = rep(".", ncol(norm_rna))
     col = col_grp(x = batch),
     bg = "white",
     shape = "straight",
@@ -174,3 +188,34 @@ plot(
 )
 ```
 
+```{r ward}
+res_clus <- hclust(res_dist, method = "ward.D2")
+df <- as.matrix(res_dist)
+annot <- data.frame(Batch = batch)
+rownames(annot) <- rownames(t(norm_rna))
+row_col <- get_colors()[seq(4)] %>% set_names(unique(batch)) %>% list(Batch = .)
+pheatmap(
+    df,
+    color = colorRampPalette(colors_ind)(100),
+    angle_col = 315,
+    na_col = "white",
+    annotation_col = annot,
+    border_color = NA,
+    annotation_colors = row_col,
+    cluster_rows = res_clus,
+    cluster_cols = res_clus,
+    cutree_rows = k,
+    cutree_cols = k,
+    fontsize = 12,
+    show_rownames = FALSE,
+    show_colnames = FALSE
+)
+```
+
+```{r pam}
+MAX_CLUSTERS <- 10
+res_nhc <- getClassif(1, MAX_CLUSTERS, t(norm_rna), res_dist)
+cls <- getClusterPerPart(MAX_CLUSTERS, res_nhc)
+sil <- getSilhouette(cls[[k-1]], t(norm_rna))
+heatMap(t(norm_rna), res_dist, sil, NULL, NULL)
+```
