@@ -552,28 +552,112 @@ select(blocks_, -Treatment) %>% ggplot(data = ., aes(x = 1, y = as.character(var
 # GSEA
 ```{r}
 # ClusterProfiler
-organism <- "org.Hs.eg.db"
-library(organism, character.only = TRUE)
-gse <- list.map(de_genes_ranked, f(i) ~ gseGO(i, ont = "BP", OrgDb = get(organism), keyType = "ENSEMBL"))
+gse <- list.map(
+  de_genes_ranked, 
+  f(i) ~ {
+    gseGO(
+      i, 
+      ont = "ALL",
+      OrgDb = get(organism), 
+      keyType = "ENSEMBL"
+      ) %>%
+      setReadable('org.Hs.eg.db', 'ENSEMBL')
+    }) %>%
+  purrr::keep(function(x) nrow(as.data.frame(x)) > 0)
 # dotplot(gse, showCategory = 10)
 
-list.map(gse, f(i) ~ data.frame(i)) %>%
-    keep(function(i) nrow(i) > 0) %>%
-    list.map(f(i, j, k) ~ data.frame(i) %>%
-        mutate(Adjusted.P.value = p.adjust, Term = str_to_title(Description), Count = setSize, Overlap = core_enrichment) %>%
-        plot_enrich(15, gsea = TRUE, title = k)) %>%
+# list.map(gse, f(i) ~ data.frame(i)) %>%
+keep(gse, function(i) nrow(i) > 0) %>%
+    list.map(
+      f(i, j, k) ~ {
+        clusterProfiler::simplify(i) %>%
+          plot_enrich(n = 25, wrap = 50, type = "gsea", title = "")
+        }
+      ) -> p
     # list(pluck(., 1), pluck(., 2), NULL, pluck(., 3), pluck(., 4)) %>%
-    plot_grid(
-        plotlist = .,
-        nrow = 2,
-        ncol = 3,
-        align = "hv"
-    ) %>% save_tiff(file.path(path_img, "gsea_treat"), 8000, 4000)
+plot_grid(
+    plotlist = p[-2],
+    nrow = 2,
+    ncol = 2,
+    align = "hv"
+)# %>%
+save_tiff(file.path(path_img, "gsea_treat2.tiff"), 8000, 4000)
 
+# Cluster categories
 enrichplot::pairwise_termsim(gse[[1]]) %>% emapplot(showCategory = 10)
-cnetplot(gse[[1]], categorySize="pvalue", foldChange=de_genes_ranked[[1]], showCategory = 3)
+enrichplot::pairwise_termsim(gse[[1]]) %>% treeplot(showCategory = 50)
+
+cnetplot0(gse, foldChange = de_genes_ranked[["aIL1 Naive vs aIL1 Responder"]])
+upsetplot(gse[[1]])
+
+# GSEA quality
 gseaplot(gse[[1]], by = "all", title = gse$Description[1], geneSetID = 1)
-ridgeplot(gse[[1]]) + labs(x = "enrichment distribution")
+gseaplot2(gse[[4]], title = gse[[4]]$Description[1], geneSetID = 1)
+ridgeplot(gse[[1]], showCategory  = 50) + labs(x = "enrichment distribution")
+
+goplot(gse[[4]])
+
+# Enrichment plot
+list.map(
+    gse,
+    f(i, j, k) ~ {
+        plot_enrich_gsea(i, wrap = 70) + 
+            labs(title = k)
+    }
+) %>% plot_grid(
+    plotlist = .,
+    nrow = 2,
+    ncol = 2,
+    align = "hv"
+)
+
+# Common pathways between models
+list.map(
+    gse,
+    f(j) ~ {
+        as.tibble(j) %>%
+            pull("Description") %>%
+            sort()
+    }) %>% unlist() %>% sort() %>% unique()
+list.map(gse, {plot_enrich_gsea(., 15) -> p; as.character(p$data$Description)}) %>% unlist() %>% sort() %>% unique() 
+
+# Common genes between pathways
+list.map(
+    gse[-2],
+    f(i, j, k) ~ {
+        # setReadable(i, OrgDb = get(organism), keyType = "ENSEMBL") %>%
+            heatplot0(i, foldChange = de_genes_ranked[[k]]) + 
+            labs(title = k) + theme(legend.position = "none")
+    }
+)  %>% plot_grid(
+    plotlist = .,
+    nrow = 3,
+    ncol = 1,
+    align = "hv"
+)
+
+# Common genes between models
+get_enrich_genes(gse, "go") %>% plot_venn1(ratio = .3)
+get_enrich_genes(gse, "go") %>% get_intersection(n = 1) %>% Filter(function(x) length(x) > 4, .)
+
+# Compare GSEA with GO
+ck_go <- lapply(
+  de_genes_ranked, 
+  function(x) data.frame(Entrez = names(x), logFC = x)
+  ) %>% 
+  list.rbind() %>%
+  mutate(group = sapply(rownames(.), function(x) str_split(x, "\\.")[[1]] %>% .[1])) %>% 
+  compareCluster(
+    data = ., 
+    geneClusters = Entrez | logFC ~ group, 
+    fun = gseGO, 
+    OrgDb = get(organism),
+    keyType = "ENSEMBL", 
+    ont = "ALL"
+    ) %>% 
+  setReadable(OrgDb = get(organism), keyType = "ENSEMBL")
+plot_enrich_gsea(ck_go)
+cnetplot0(ck_go)
 ```
 
 # Kegg pathways
