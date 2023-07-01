@@ -444,33 +444,33 @@ outs <- rownames(blocks[[i]]) %>% paste0("^", ., "$", collapse = "|")
 name <- str_split(names(blocks)[i], " vs ")[[1]]
 attributes(clinic_intersect)$code %>% filter(str_detect(column_code, paste0("^", c("C_2643_3796", "C_2643_3803", "C_2649_3888", "C_2649_3895", "C_2649_3891", "C_2643_3797"), "$", collapse = "|"))) %>% pull(item_name) %>% c("batch") %>% select(clinic_intersect, .) %>% mutate(clinical_center = str_remove_all(clinical_center, "\\d{2} - ") %>% str_remove_all(" \\(.+\\)") %>% str_remove_all(".+ [-–] ")) %>% filter(str_detect(immun_aid_identifier, outs)) %>% mutate(Group = ifelse(blocks[[i]] == 0, name[1], name[2])) %>% select(2, 8, 3:4, 7, 6, 1) %>% set_colnames(colnames(.) %>% str_replace_all("_", " ") %>% str_to_sentence()) %>% arrange(Group) %>% kable0()
 
-
 list.map(list("IL10", "BCL6", "VEGFA"), f(x) ~ plotCounts(l_de0[[i]], gene = x, intgroup = "group", returnData = TRUE) %>% select(-group) %>% set_colnames(x)) %>% Reduce(cbind, .)
 ```
 
 # Significant genes
 ```{r}
-de_genes <- list.map(l_de2, f(i) ~ get_top0(i, 0.5, 0.05, n = 200) %>%
+de_genes0 <- list.map(l_de2, f(i) ~ get_top0(i, n = 1000) %>%
     rownames() %>%
     str_remove_all("_\\d") %>%
     unique())
-cbind(sapply(blocks, function(i) paste0(sum(i), "/", which(i == 0) %>% length())) %>% as.data.frame() %>% set_colnames(c("N. patients")), sapply(de_genes, length) %>% as.data.frame() %>% set_colnames(c("N. significant genes"))) %>% kable0()
+unlist(de_genes0) %>% unique() %>% sort() %>% data.frame(id = .) %>% write_tsv("temp.tsv", col_names = FALSE)
+cbind(sapply(blocks, function(i) paste0(which(pull(i, 1) == 0) %>% length(), "/", which(pull(i, 1) == 1) %>% length())) %>% as.data.frame() %>% set_colnames(c("N. patients")), sapply(de_genes0, length) %>% as.data.frame() %>% set_colnames(c("N. significant genes"))) %>% kable0()
 
 # fc_cut <- c(1.5, 1.5)
 fc_cut <- c(0.5, 1.5)
 de_genes1 <- list.map(l_de2, f(i) ~ {
-    list.map(c("Up-regulated", "Down-regulated"), f(j, k) ~ {
-        get_top0(i, 1, 0.05) %>%
-            filter(Expression == j) %>%
+    list.map(c("Up-regulated", "Down-regulated"), f(j) ~ {
+      filter(i, Expression == j) %>%
+        get_top0(0.5, 0.05, 2000) %>%
             rownames() %>%
             str_remove_all("_\\d") %>%
             unique()
     })
 })
 
-sapply(de_genes, function(x) paste(sapply(x, length), sep = "/"))
+# sapply(de_genes, function(x) paste(sapply(x, length), sep = "/"))
 
-cbind(sapply(blocks, function(i) paste0(which(i == 0) %>% length(), "/", sum(i))) %>% as.data.frame() %>% set_colnames(c("N. patients")), sapply(de_genes1, function(x) paste(sapply(x, length), collapse = "/")) %>% as.data.frame() %>% set_colnames(c("N. significant genes (Up-/Down-regulated)"))) %>%
+cbind(sapply(blocks, function(i) paste0(which(pull(i, 1) == 0) %>% length(), "/", which(pull(i, 1) == 1) %>% length())) %>% as.data.frame() %>% set_colnames(c("N. patients")), sapply(de_genes1, function(x) paste(sapply(x, length), collapse = "/")) %>% as.data.frame() %>% set_colnames(c("N. significant genes (Up-/Down-regulated)"))) %>%
     kable0() %>%
     kable_styling(bootstrap_options = c("striped", "condensed"))
 # %>% slice(c(seq(2), 4))
@@ -480,12 +480,22 @@ cbind(sapply(blocks, function(i) paste0(which(i == 0) %>% length(), "/", sum(i))
 #     sort(decreasing = TRUE)})
 
 de_genes_ranked <- list.map(l_de2, f(i, j) ~ {
-        get_top0(i, 0.01, 1, n = 500, rank = TRUE) -> tmp
-        tmp$pfc %>%
+    get_top0(i, 0.01, 1, n = 50000, rank = TRUE) -> tmp
+    tmp$pfc %>%
         set_names(tmp$ensembl_ids) %>%
         sort(decreasing = TRUE)
 })
 sapply(de_genes_ranked, length)
+
+top_genes <- list.map(c("Up", "Down"), f(i, j) ~ list.map(de_genes1, .[[j]]))
+# list.map(de_genes2, .[[1]])
+# plot_venn1(top_genes[[1]], ratio = .4, wrap = 20)
+top_genes0 <- list.map(c("Up", "Down"), f(i, j, k) ~ top_genes[[j]] %>% set_names(paste0(names(.), " (", i, ")")))
+get_intersection(top_genes[[2]])
+get_intersection(top_genes[[2]], 2)
+get_intersection(top_genes[[2]], 3)
+# plot_venn1(de_genes3, ratio = .4, wrap = 20)
+filtered <- names(top_genes[[1]]) %>% str_detect("Naive") %>% which()
 ```
 
 # Enrichment analysis
