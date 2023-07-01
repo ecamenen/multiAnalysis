@@ -644,7 +644,7 @@ get_kegg_path <- function(x, query) {
     theme(legend.position = "none")
 }
 
-get_genes_path <- function(x, query) {
+get_genes_path <- function(x, query, name = "Genes") {
   list.map(
     query,
     f(i) ~ {
@@ -654,9 +654,9 @@ get_genes_path <- function(x, query) {
           as.data.frame(j) %>%
             filter(Adjusted.P.value <= 0.05) %>%
             filter(str_detect(Term, paste0("^", i) %>% str_remove_all("\\.\\.\\.$"))) %>%
-            pull(Term) # %>%
-          # str_split(";")
-        }) %>% unlist() %>% unname()
+            pull(name)  %>%
+            str_split(";") %>% unlist()
+        }) %>% unlist() %>% unique() %>% sort() %>% unname()
     }
   ) %>% compact()
 }
