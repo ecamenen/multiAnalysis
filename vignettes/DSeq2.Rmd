@@ -578,18 +578,132 @@ ridgeplot(gse[[1]]) + labs(x = "enrichment distribution")
 
 # Kegg pathways
 ```{r, eval = FALSE}
-c("CD3D", "CD3E", "CD3G", "CD8A", "LCK") %>% bitr(fromType = "ALIAS", toType = c("ENTREZID"), OrgDb = get(organism)) -> tmp
+# Convert gene list into KEGG IDs
 kegg_genes <- list.map(de_genes_ranked, f(i) ~ {
-    bitr(names(i), fromType = "ENSEMBL", toType = c("ENTREZID"), OrgDb = get(organism)) %>% left_join(data.frame(ENSEMBL = names(i), log2FoldChange = i)) -> tmp
+    bitr(names(i), fromType = "ENSEMBL", toType = "ENTREZID", OrgDb = get(organism)) %>% left_join(data.frame(ENSEMBL = names(i), log2FoldChange = i)) -> tmp
     tmp$log2FoldChange %>%
         set_names(pull(tmp, ENTREZID)) %>%
         sort(decreasing = TRUE)
 })
 sapply(kegg_genes, length)
 
-tmp <- list.map(kegg_genes, f(i) ~ gseKEGG(
+# Compare GSEA with KEGG
+ck_kegg <- lapply(
+  kegg_genes, 
+  function(x) data.frame(Entrez = names(x), logFC = x)
+  ) %>%
+  list.rbind() %>%
+  mutate(group = sapply(rownames(.), function(x) str_split(x, "\\.")[[1]] %>% .[1])) %>% 
+  compareCluster(
+    data = ., 
+    geneClusters = Entrez | logFC ~ group, 
+    fun = "gseKEGG", 
+    organism = "hsa"
+    ) %>% 
+  setReadable(OrgDb = get(organism), keyType = "ENTREZID")
+
+plot_enrich_gsea(ck)
+cnetplot0(ck_kegg)
+
+# Perform GSEA with KEGG
+gsea_kegg <- list.map(
+  kegg_genes, 
+  f(i) ~ {
+    gseKEGG(
     geneList = i,
     organism = "hsa",
-    keyType = "ncbi-geneid"
-))
+    # keyType = "ncbi-geneid"
+  ) %>%
+      setReadable(OrgDb = get(organism), keyType = "ENTREZID")
+  }
+) %>% 
+  purrr::keep(function(x) nrow(as.data.frame(x)) > 0)
+
+# Enrichment plot
+# list.map(gsea_kegg, f(i) ~ data.frame(i)) %>%
+    # keep(function(i) nrow(i) > 0) %>%
+    list.map(gsea_kegg, f(i, j, k) ~ plot_enrich(i, 15, type = "gsea", title = k)) %>%
+    # list.map(gsea_kegg,  f(i, j, k) ~ plot_enrich_gsea(i, 15) + labs(title = k)
+plot_grid(
+        plotlist = .,
+        nrow = 2,
+        ncol = 1,
+        align = "hv"
+    )
+
+# Common genes between pathways
+list.map(
+    gsea_kegg,
+    f(i, j, k) ~ {
+        # setReadable(i, OrgDb = get(organism), keyType = "ENTREZID") %>%
+            heatplot0(foldChange = kegg_genes[[k]]) + 
+            labs(title = k) + theme(legend.position = "none")
+    }
+)  %>% plot_grid(
+    plotlist = .,
+    nrow = 2,
+    ncol = 1,
+    align = "hv",
+    rel_heights = c(1, 1.5)
+)
+get_kegg_path(gsea_kegg, "Human T")
+
+# Common genes between models
+get_enrich_genes(gsea_kegg) %>% plot_venn1(cex = 1.5, n = 20)
+get_enrich_genes(gsea_kegg) %>% get_intersection0()
+
+# c("CD3D", "CD3E", "CD3G", "CD8A", "LCK") %>% bitr(fromType = "ALIAS", toType = c("ENTREZID"), OrgDb = get(organism)) -> tmp
+
+enrich_kegg <- list.map(
+  c("Up-regulated", "Down-regulated"),
+  f(x) ~ {
+    list.map(
+      compact(de_genes1),
+      f(i) ~ {
+        res <- bitr(i[[x]], fromType = "ALIAS", toType = "ENTREZID", OrgDb = get(organism))
+    if (length(res) > 0) {
+        pull(res, 2) %>%
+            head(250) %>%
+            enrichKEGG(organism = "hsa")
+    }
+    }) %>% compact() %>% purrr::keep(function(x) nrow(as.data.frame(x)) > 0)
+}) %>% compact()
+
+list.map(
+  enrich_kegg,
+  f(i, j, k) ~ {
+    list.map(
+      i, 
+      f(x, y, z) ~ {
+    #   tiff(
+    #     file.path(path_img, paste0("enrichr_", z, "_", ittt, ".tiff")),
+    #     units = "px",
+    #     width = 8000,
+    #     height = 4000,
+    #     res = 300
+    # )
+    plot_enrich(x, wrap = 25, n = 11, type = "kegg", title = "", paste0(z, " (", str_to_title(k), ")") %>% str_wrap(20))
+        })
+    # dev.off()
+}) -> p
+
+plot_grid(
+    plotlist = c(p[[1]][-2], p[[2]]),
+    nrow = 2,
+    ncol = 3,
+    align = "hv"
+)
+
+# Common pathways between models
+list.map(enrich_kegg, list.map(., f(j) ~ sort(j$Description))) -> pathways
+pathways0 <- c(pathways[[1]][-2], pathways[[2]]) %>% set_names(paste(c(rep("Up", 2), rep("Down", 4)), names(.)))
+plot_venn1(pathways0[-c(2:3)])
+get_intersection(pathways0[-c(2:3)])
+
+get_kegg_path(enrich_kegg, "Human T")
+
+genes <- get_enrich_genes(c(enrich_kegg[[1]], enrich_kegg[[2]]), "Human T")  %>% set_names(sapply(c(1, 2), function(x) paste0(names(enrich_kegg[[x]]), " (", names(enrich_kegg)[x],")")) %>% unlist())
+
+plot_venn1(genes, label = FALSE, colour = get_colors()[c(1, 4, 6, 8, 2:3, 5)])
+get_intersection0(genes[-c(2:3)])
 ```
