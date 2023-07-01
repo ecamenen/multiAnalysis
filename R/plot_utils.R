@@ -7,14 +7,14 @@ theme_perso0 <- function(p, cex = 1, show_axis = TRUE) {
     p <- p +
         theme(
             axis.title = axis,
-            axis.text = element_text(size = 10 * cex),
-            axis.ticks = element_line(size = 1.2),
+            axis.text = element_text(size = 15 * cex, color = "gray50"),
+            axis.ticks = element_line(color = "gray50"), #size = 1.2),
             plot.title = element_text(face = "bold", size = 22 * cex, hjust = 0.5),
             legend.title = element_text(face = "italic", size = 12 * cex),
             legend.text = element_text(colour = "black", size = 10 * cex)
         )
     if (show_axis) {
-        p <- p + theme(axis.line = element_line(size = 1.2))
+        p <- p + theme(axis.line = element_line(color = "gray50")) #size = 1))
     }
     p
 }
@@ -126,16 +126,6 @@ plotHistogram <- function(p = NULL, df = NULL, hjust = 0, vjust = 0.5, n = 100, 
     geom_text(aes(label = round(..y.., dec) %>% paste0("%")), hjust = hjust, vjust = vjust, size = cex * 4, color = colors) +
     theme(legend.position = "none") +
     scale_fill_gradient(low = color_gradient[1], high = color_gradient[2])
-}
-
-#' Default font for plots
-#' @export
-theme_perso <- function() {
-    theme(
-        legend.text = element_text(size = 13),
-        legend.title = element_text(face = "bold.italic", size = 16),
-        plot.title = element_text(size = 25, face = "bold", hjust = 0.5, margin = margin(0, 0, 20, 0))
-    )
 }
 
 #' @export
@@ -278,13 +268,25 @@ plot_enrich <- function(x, n = 20, title = NULL, type = "go", cex = 1, ratio = 5
         },
         rank = row_number(generatio)
       )
+
     colour_x <- ifelse(df$Adjusted.P.value <= 0.05, get_colors()[1], "gray50")
     p <- ggplot(df, aes(generatio, rank)) +
         geom_point(aes(color = Adjusted.P.value, size = Count)) +
         scale_size(range = c(0.5, 12), name = "Gene count") +
         labs(title = title, x = "Gene ratio", y = "") +
-      scale_y_continuous(breaks = df$rank, labels = df$label)
-      theme_enrich(p, cex, colour = colour_x) #+
+      scale_y_continuous(breaks = df$rank, labels = df$label)+
+      scale_x_continuous(breaks = pretty_breaks(n = 4), labels = label_percent()) +
+      scale_size_continuous(breaks = pretty_breaks(n = 3), labels = label_number_auto())
+      theme_enrich(p, cex, colour = colour_x)  +
+        theme(
+          axis.text.x = element_text(
+            size = 16 * cex,
+            angle = 45,
+            hjust = 1,
+            vjust = 1,
+            colour = "gray50"
+          )
+        )
         # expand_limits(y = max(df$generatio) + max(df$generatio) / ratio)
 }
 
@@ -316,6 +318,8 @@ theme_enrich <- function(p, cex = 1, colour = "gray50") {
     ) +
     scale_color_gradientn(
       # labels = label_pvalue(),
+      labels = label_number_auto(),
+      # breaks = breaks_pretty(3),
       # breaks = breaks_width(width = 5, offset = 0),
       name = "FDR",
       colours = c(get_colors()[1], "gray50", get_colors()[2])
