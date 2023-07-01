@@ -84,26 +84,75 @@ ncomp <- 2
 axis <- paste0("Dim. ", seq(ncomp))
 ```
 
-```{r}
-axis <- paste0("Dim.", seq(ncomp)
-coord <- as.data.frame(res_pca$ind$coord) %>% mutate(batch = batch)
-plot_dimred(res$layout, axis)
+```{r umap}
+res <- umap(t(norm_rna))
+coord <- trans_coord(res$layout)
+plot_dimred(coord, axis)
+metadata <- rownames_to_column(coord, "ID") %>% 
+  mutate(Sample = str_remove_all(ID, "[AB]")) %>%
+  left_join(clinic, by = "Sample")
+
+p <- list.map(
+  c("Gender", "Ethnicity"),
+  f(i, j) ~ {
+    select(metadata, c(axis[1], i)) %>% 
+    filter(!is.na(!!sym(i))) %>% 
+    group_by(!!sym(i)) %>%
+    group_split() %>%
+    as.list() %>%
+    list.map(f(i) ~ pull(i, 1)) %>%
+    list_cbind() %>%
+    round() %>%
+    set_colnames(unique(pull(metadata, i)) %>% na.omit() %>% sort()) %>%
+    plot_violin0(
+        wrap = 5,
+        wrap_title = 20,
+        colour = brewer.pal(10, "Paired")[3:4 + 2 * j],
+        color_title = brewer.pal(10, "Paired")[4 + 2 * j],
+        stat = TRUE,
+        title = i
+    )
+  }
+)
+list.map(
+  c("Age", "BMI"),
+  f(x, y) ~ select(metadata, c(axis[1], x)) %>% plot_cor2(color = get_colors()[y + 1], title = x)
+) %>% c(p, .) %>%
+plot_grid(
+  plotlist = .,
+  nrow = 2,
+  ncol = 2,
+  align = "hv"
+)
+list.map(
+  c("Gender", "Ethnicity", "Age", "BMI"),
+  f(var) ~ select(metadata, c(2:3, var)) %>% plot_dimred(axis, legend = var)
+) %>%
+  plot_grid(
+  plotlist = .,
+  nrow = 2,
+  ncol = 2,
+  align = "hv"
+)
 ```
 
 ```{r pca}
-ncomp <- 2
 res_pca <- PCA(t(norm_rna), scale.unit = FALSE, ncp = ncomp, graph = FALSE)
-plot_dimred(res_pca$ind$coord, axis)
+coord <- trans_coord(res_pca$ind$coord)
+res_pca$eig[, "percentage of variance"] %>%
+  plot_dimred(coord, axis, eig = .)
+outs <- lapply(seq(ncomp), function(x) get_outliers(res$layout[, x], method = "iqr", replace = FALSE))
+lapply(seq(ncomp), function(x) get_outliers(res_pca$ind$coord[, x], method = "mad", replace = FALSE, c = 6))
 ```
 
-```{r umap}
-hc_metric <- "spearman"
+```{r mds}
+hc_metric <- "pearson"
 res_dist <- get_dist(t(norm_rna), stand = FALSE, method = hc_metric)
+
 mds <- cmdscale(res_dist, k = ncomp, eig = TRUE)
-coord <- as_tibble(mds$points)
-eig <- (mds$eig / sum(mds$eig[mds$eig > 0]) * 100)
-axis <- paste0(axis, " (", paste(round(eig[seq(2)], 1), "%)"))
-plot_dimred(coord, axis)
+mds$points[, 1] <- mds$points[, 1] * -1
+(mds$eig / sum(mds$eig[mds$eig > 0]) * 100) %>%
+  plot_dimred(mds$points, axis, eig = .)
 ```
 
 ```{r som}
