@@ -339,37 +339,47 @@ add_significance0 <- function(x, p.col = NULL) {
     )
 }
 
+expx_trans <- function(x, base = 2) {
+  2 ^(abs(x)) * sign(x)
+}
+
+logx_trans <- function(x, base = 2) {
+  log(abs(x), base) * sign(x)
+}
+
+log2x_trans <- trans_new("log2x", function(x) logx_trans(x, 2), function(x) expx_trans(x, 2), breaks = breaks_extended(4), format = label_number_auto())
+log10x_trans <- trans_new("log10x", function(x) -log10(x), function(x) 10^(-x), breaks = breaks_extended(6), format = label_number_auto())
+
 #' @export
 volcano_plot <- function(res, top_genes = NULL, title = "", legend = "right", cex = 1.5) {
-    # p_lab <- list.mapv(seq(3), f(.) ~ stri_dup("*", .))
-    # ps <- filter(res, padj <= 0.05) %>% pull(log10p) %>% min()
-    ps <- -log(0.05, 10)
-    # ds <- c(min(top_genes$log2fc), max(top_genes$log2fc))
+  # seq(3, 10) %>% paste0("2^", .) %>% sapply(function(x) parse(text = x) %>% eval())
+    # ds <- c(1.5, 3, 6, 20, 60)
+    ds <- c(min(res$log2fc, na.rm = TRUE), max(res$log2fc, na.rm = TRUE)) %>% pretty(5) %>% expx_trans() %>% c(1)
+    ps <- min(res$padj, na.rm = TRUE) %>% log10() %>% `-`(1) %>% seq(-1, .) %>% pretty(3) %>% paste0("1e", .) %>% as.numeric()
     # ds <- c(-1.2, -0.8, -0.5, 0.5, 0.8, 1.2)
-    res0 <- data.frame(t(c(rep(NA, 6), -100, NA, -1, ""))) %>%
+    res0 <- data.frame(t(c(rep(NA, 4), -1, NA, Inf, NA, -1, NA))) %>%
         mutate_all(as.numeric) %>%
         data.frame(c("Up-regulated", "Down-regulated")) %>%
         set_colnames(colnames(res)) %>%
         rbind(res)
-    p <- ggplot(res0, aes(log2fc, log10p)) +
-        geom_point(aes(color = Expression), size = 3 * cex, alpha = 0.5) +
-        geom_vline(xintercept = c(-0.5, 0.5), colour = "gray", lty = 2, lwd = 1.2) +
-        geom_hline(yintercept = ps, colour = "gray", lty = 2, lwd = 1.2) +
-        xlab(expression("log"[2] * "FC")) +
-        ylab(expression("-log"[10] * "P")) +
-        scale_color_manual(values = c("dodgerblue3", "gray50", "firebrick3")) +
-        guides(colour = guide_legend(override.aes = list(size = 2))) +
-        scale_x_continuous(limits = max(abs(res$log2fc)) * c(-1, 1)) +
-        scale_y_continuous(limits = c(0, max(abs(res$log10p)))) +
-        # scale_y_continuous(breaks = ps, labels = p_lab) +
-        ggtitle(label = title) +
-        theme_classic() %>%
-        theme_perso0(cex) +
-        theme(legend.position = legend)
+    p <- ggplot(res0, aes(expx_trans(log2fc, 2), padj)) +
+      geom_point(aes(color = Expression), size = 3 * cex, alpha = 0.5) +
+      geom_vline(xintercept = expx_trans(0.5) * c(-1, 1), colour = "gray", lty = 2, lwd = 1.2) +
+      geom_hline(yintercept = 0.05, colour = "gray", lty = 2, lwd = 1.2) +
+      xlab("FC") +
+      ylab("FDR") +
+      scale_color_manual(values = c("dodgerblue3", "gray50", "firebrick3")) +
+      guides(colour = guide_legend(override.aes = list(size = 2))) +
+      scale_x_continuous(trans = log2x_trans, breaks = c(rev(ds) * -1, ds), labels = label_number_auto()) +
+      scale_y_continuous(breaks = ps, trans = log10x_trans, labels = label_number_auto()) +
+      ggtitle(label = title) +
+      theme_classic() %>%
+      theme_perso0(cex) +
+      theme(legend.position = legend)
     if (!is.null(top_genes)) {
         p + geom_text_repel(
             data = top_genes,
-            mapping = aes(log2fc, log10p, label = name, color = Expression),
+            mapping = aes(expx_trans(log2fc, 2), padj, label = name, color = Expression),
             size = cex * 6
         )
     } else {
