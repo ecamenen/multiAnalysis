@@ -332,33 +332,33 @@ l_de2 <- list.map(l_de, f(i) ~ i %>%
     filter(log2FoldChange >= 0.01 | log2FoldChange <= -0.01)
 )
 
-list.map(l_de2, f(i, k, j) ~ i %>%
-    volcano_plot(cex = 3, legend = "none") + xlab("") + ylab("")) -> p
-for (pl in names(p)) {
-    save_tiff(p[[pl]], file.path(path_img, paste0("volcano_", pl)), 4000, 3000)
-}
-top_genes <- list(
-    c("IFI44", "MX1", "USP18", "FOXO3", "MCL1", "PTGS2", "VEGFA"),
-    c("FAM13A"),
-    c("KBTBD11", "TNF", "LIPA", "RAD52", "HCN3"),
-    c("FCGR1A", "HIF1A", "ICAM1", "SOD2", "TNFAIP6", "CD3D", "CD3E", "CD3G", "CD8A", "LCK"),
-    c("BCL6", "IL10", "VEGFA")
-)
-list.map(l_de2, f(i, k, j) ~ i %>%
-    volcano_plot(top_genes = filter(i, name %in% top_genes[[k]]), cex = 3, legend = "none") + xlab("") + ylab("")) -> p2
-for (pl in names(p2)) {
-    save_tiff(p2[[pl]], file.path(path_img, paste0("volcano2_", pl)), 4000, 3000)
-}
+# list.map(l_de2, f(i, k, j) ~ i %>%
+#     volcano_plot(cex = 3, legend = "none") + xlab("") + ylab("")) -> p
+# list.map(p, f(i, j, k) ~{
+#     save_tiff(i, file.path(path_img, paste0("volcano_", k, ".tiff")), 4000, 3000)
+# })
+# top_genes <- list(
+#     c("IFI44", "MX1", "USP18", "FOXO3", "MCL1", "PTGS2", "VEGFA"),
+#     c("FAM13A"),
+#     c("KBTBD11", "TNF", "LIPA", "RAD52", "HCN3"),
+#     c("FCGR1A", "HIF1A", "ICAM1", "SOD2", "TNFAIP6", "CD3D", "CD3E", "CD3G", "CD8A", "LCK"),
+#     c("BCL6", "IL10", "VEGFA")
+# )
+top_genes <- list.map(l_de2, get_top0(., n = 10))
+list.map(l_de2, f(i, j, k) ~ volcano_plot(i, top_genes = top_genes[[j]], cex = 1, legend = "none", title = "") + xlab("") + ylab("")) -> p2
+# for (pl in names(p2)) {
+#     save_tiff(p2[[pl]], file.path(path_img, paste0("volcano2_", pl, ".tiff")), 4000, 3000)
+# }
 
 # list(pluck(., 1), pluck(., 2), NULL, pluck(., 3), pluck(., 4)) %>%
 # list(pluck(., 1), NULL, NULL, pluck(., 2)) %>%
 plot_grid(
-    plotlist = p[c(seq(2), 4, 5, 3)],
+    plotlist = p2,
     nrow = 2,
     ncol = 3,
     align = "hv"
-) %>%
-    save_tiff(file.path(path_img, "volcano_treat2"), 8000, 4000)
+)
+#     save_tiff(file.path(path_img, "volcano_treat2"), 8000, 4000)
 ```
 
 # Descriptive statistics
