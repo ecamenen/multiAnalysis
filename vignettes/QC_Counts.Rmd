@@ -14,120 +14,437 @@ knitr::opts_chunk$set(
 )
 ```
 
-```{r setup}
-path <- file.path(golem::get_golem_wd(), "inst", "extdata")
-gene_counts <- read_tsv(file.path(path, "gene_counts_batch4.tsv")) %>%
-  dplyr::rename(ensembl_gene_id = gene_id)
-gene_counts_norm <- round(gene_counts[, -1]) %>%
-  as.matrix() %>%
-  vst() %>%
-  as_tibble() %>%
-  mutate(ensembl_gene_id = gene_counts$ensembl_gene_id) %>%
-  relocate(ensembl_gene_id)
+# Functions
+```{r}
+perc_type <- function(x, val = "A", col = "biotype") {
+  select(x, matches("\\d{5}[AB]")) %>%
+    apply(
+      2, 
+      function(i) {
+        prop <- sum(str_detect(pull(x, col), val) & i >= 1, na.rm = TRUE) / sum(i >= 1, na.rm = TRUE) * 100
+        ifelse(is.nan(prop), 0, prop)
+      }
+    )
+}
 
-# db_annot <- useEnsembl(biomart = "genes", dataset = "hsapiens_gene_ensembl", version = 104)
-# gene_query <- getBM(
-#   attributes = c("ensembl_gene_id", "hgnc_symbol", "chromosome_name", "transcript_biotype", "description", "wikigene_description"),
-#   filters = c("ensembl_gene_id", "chromosome_name"),
-#   values = list(pull(gene_counts, 1), c(seq(22), "MT", "Y", "X")),
-#   mart = db_annot
-# )
-# write_tsv(gene_query, file = file.path(path, "gene_query.tsv"))
-gene_query <- read_tsv(file.path(path, "gene_query.tsv"))
-
-metadata <- inner_join(gene_counts, gene_query, by = "ensembl_gene_id") %>% mutate(chromosome_name = gsub("^(\\d{1})$", "0\\1", chromosome_name))
-
-x <- "chromosome_name"; filter(metadata, !str_detect(!!sym(x), "CHR_")) %>% pull(!!sym(x)) %>% unique()
-
-df0 <- pivot_longer(metadata, cols = ends_with("05PB1"), names_to = "Sample", values_to = "Count")
-p <- ggplot(df0, aes(x = as.factor(chromosome_name), y = Count, color = Sample, group = Sample)) +
-  geom_point(position = position_jitter(width = 0.2, height = 0)) +
-  # geom_boxplot(width = 0.5, alpha = 0.6, outlier.shape = NA) +
-  labs(x = "Chromosome", y = "# Reads") +
-  theme_minimal() +
-  theme(
-    axis.title = element_text(size = 15, face = "bold.italic", color = "gray50"),
-    panel.grid.major.x = element_blank(),
-    axis.text = element_text(size = 13, color = "gray50"),
-    legend.position = "none"
+pivot_genes <- function(x) {
+  pivot_longer(
+    x, 
+    cols = matches("\\d{5}[AB]"), 
+    names_to = "Sample", 
+    values_to = "Count"
   )
-p
+}
 
-ggplot(df0, aes(x = hgnc_symbol, y = Count, color = Sample)) +
-  geom_line(size = 1) +
-  labs(x = "Counts", y = "Density") +
-  theme_minimal() +
-  theme(
-    axis.title = element_text(size = 15, face = "bold.italic", color = "gray50"),
-    panel.grid.major.x = element_blank(),
-    axis.text = element_text(size = 13, color = "gray50"),
-    legend.position = "none"
-  ) +
-  scale_color_manual(values = get_colors0()(3)) +
-  scale_x_continuous(trans = log10_trans(), breaks = df0$Count) +
-  scale_y_continuous(label = label_number(suffix = "%"))
-###
+# Plot chromosomes
+plot_chr <- function(x) {
+  df0 <- pivot_genes(x)
+  # arrange(df0, desc(Count)) %>% select(-c(contains(c("description", "biotype", "strand", "peptide")))) %>% print(n = 30) 
+  
+  df <- filter(df0, chromosome_name %in% c(seq(22), "MT", "Y", "X")) %>%
+    mutate(chromosome_name = gsub("^(\\d{1})$", "0\\1", chromosome_name))
+  p <- ggplot(df, aes(x = as.factor(chromosome_name), y = Count, color = Sample, group = Sample)) +
+    geom_point(position = position_jitter(width = 0.2, height = 0)) +
+    # geom_boxplot(width = 0.5, alpha = 0.6, outlier.shape = NA) +
+    labs(x = "Chromosome", y = "# Reads") +
+    theme_minimal() +
+    theme(
+      axis.title = element_text(size = 15, face = "bold.italic", color = "gray50"),
+      panel.grid.major.x = element_blank(),
+      axis.text = element_text(size = 13, color = "gray50"),
+      legend.position = "none"
+    ) +
+    scale_y_continuous(labels = label_number_auto())
+  # scale_color_manual(values = get_colors0()(ncol(gene_counts))) 
+  p
+}
 
+# Plot genes
+plot_density_genes <- function(x, density = FALSE, norm = FALSE) {
+  if (norm) {
+    lim <- min(round(x[, -1])) + .1
+  } else {
+    lim <- 1
+  }
+  if (!density) {
+    x <- mutate(x, `00000A` = apply(x[, -1], 1, function(i) median(i, na.rm = TRUE)))
+  }
+  df <- pivot_genes(x)
+  p <- ggplot(filter(df, Count >= lim), aes(x = Count, color = Sample))
+  if (density) {
+    p <- p + 
+      stat_density(geom = "line", size = 1) + 
+      ylab("Density") +
+      scale_y_continuous(label = label_number(suffix = "%")) +
+      scale_color_manual(values = get_colors0()(ncol(gene_counts)))
+  } else {
+    p <- p + 
+      geom_line(stat = "bin", binwidth = 1) + 
+      ylab("Frequency") +
+      scale_y_continuous(label = label_number_auto()) +
+      scale_color_manual(
+        values = c("red", rep("gray80", ncol(x))), 
+        breaks = c("00000A", unique(df$Sample)[unique(df$Sample) != "00000A"])
+      )
+  }
+  p <- p +
+    xlab("# Reads") +
+    theme_minimal() +
+    theme(
+      axis.title = element_text(size = 15, face = "bold.italic", color = "gray50"),
+      axis.text = element_text(size = 13, color = "gray50"),
+      axis.text.x = element_text(angle = 45),
+      legend.position = "none"
+    )
+  if (norm) {
+    p + scale_x_continuous(labels = label_number_auto(), limits = c(lim, NA))
+  } else {
+    p +
+      scale_x_continuous(
+        trans = log10_trans(),
+        breaks = c(1, paste0("1e", seq(7))) %>% as.numeric(),
+        labels = label_number_auto(),
+        limits = c(lim, NA)
+      )
+  }
+}
 
-plot_dispersion <- function(x) {
+plot_dispersion <- function(x, norm = FALSE, ind = FALSE) {
   df <- data.frame(Sample = rownames(x), x)
   colnames(df)[-1] <- colnames(x)
-
-  medians <- apply(df[, -1], 2, function(x) median(x[x >= 1], na.rm = TRUE))
-  iqrs <- apply(df[, -1], 2, function(x) IQR(x[x >= 1], na.rm = TRUE))
-
-  df0 <- pivot_longer(df, cols = -Sample, names_to = "gene", values_to = "value") %>%
-    # filter(value >= 1) %>%
-    mutate(value = round(value))
-  colors <- get_colors0()(ncol(df) - 1)
-
-  ggplot(df0, aes(x = gene, y = value, color = gene)) +
-    geom_pointrange(
-      aes(
-        y = medians[gene],
-        ymin = medians[gene] - 0.5 * iqrs[gene],
-        ymax = medians[gene] + 0.5 * iqrs[gene],
-        color = gene
-      ),
-      size = .5,
-      shape = 3,
-      alpha = .5
-    ) +
-  # geom_text(aes(label = gene)) +
-    geom_point(size = 1, alpha = 0.5) +
-    labs(x = "Samples", y = "# Reads", color = "Samples") +
+  if (norm) {
+    lim <- min(round(x[, -1])) + .1
+  } else {
+    lim <- 1
+  }
+  
+  df0 <- pivot_longer(df, cols = -Sample, names_to = "gene", values_to = "Count") %>%
+    filter(value >= lim) %>%
+    mutate(Count = round(Count))
+  
+  p <- p + ggplot(df0, aes(x = gene, y = Count, color = gene))
+  
+  if (ind) {
+    medians <- apply(df[, -1], 2, function(i) median(i[i >= lim], na.rm = TRUE))
+    iqrs <- apply(df[, -1], 2, function(i) IQR(i[i >= lim], na.rm = TRUE))
+    colors <- get_colors0()(ncol(x))
+    cex <- 1
+    p <- p + 
+      geom_pointrange(
+        aes(
+          y = medians[gene],
+          ymin = medians[gene] - 0.5 * iqrs[gene],
+          ymax = medians[gene] + 0.5 * iqrs[gene],
+          color = gene
+        ),
+        size = .5,
+        shape = 3,
+        alpha = .5
+      ) +
+      xlab("Samples")  +
+      scale_color_manual(values = colors) +
+      theme(
+        axis.text.y = element_text(size = 13),
+        axis.text.x = element_text(angle = 90, color = colors, size = 10)
+      )
+    # guides(x = guide_axis(n.dodge = 3))
+  } else {
+    colors <- rep("gray50", ncol(x))
+    cex <- .25
+    p <- p + xlab("Genes") + theme(axis.text.x = element_blank())
+  }
+  
+  p +
+    # geom_text(aes(label = gene)) +
+    geom_point(size = cex, alpha = 0.5, color = color) +
+    labs(y = "# Reads", color = "Samples") +
     theme_minimal() +
     theme(
       axis.title = element_text(size = 22, face = "bold.italic", color = "gray50"),
       panel.grid.major.x = element_blank(),
-      # axis.text.x = element_blank(),
-      axis.text.y = element_text(size = 13),
-      axis.text.x = element_text(angle = 90, color = colors, size = 10),
       legend.position = "none"
     ) +
     scale_y_continuous(
       # trans = log10_trans(),
       # breaks = c(1, paste0("1e", seq(7))) %>% as.numeric(),
       labels = label_number_auto()
-    ) +
-    scale_color_manual(values = colors)
-    # guides(x = guide_axis(n.dodge = 3))
+    )
+  # geom_point(size = 1, alpha = 0.5) +
+}
+```
+
+
+# Setup
+```{r setup}
+path <- file.path(golem::get_golem_wd(), "inst", "extdata")
+# cwd <- file.path(path, "GeneCounts")
+# db_annot <- useEnsembl(biomart = "genes", dataset = "hsapiens_gene_ensembl", version = 104)
+# gene_query <- getBM(
+#   attributes = c(
+#     "ensembl_gene_id",
+#     "hgnc_symbol", 
+#     "chromosome_name",
+#     "transcript_biotype",
+#     "wikigene_description", 
+#     "ensembl_peptide_id",
+#     "strand"
+#   ),
+#   filters = c("ensembl_gene_id"),
+#   values = list(pull(gene_counts, 1)),
+#   mart = db_annot
+# )
+# write_tsv(gene_query, file = file.path(path, "gene_query.tsv"))
+gene_query <- read_tsv(file.path(path, "gene_query.tsv"))
+clinic <- read_tsv(file.path(path, "clinic.tsv"))
+gender <- select(clinic, c("C_2643_3796", "C_2649_3888")) %>%
+  set_colnames(c("Sample", "gender")) %>%
+  filter(!is.na(gender))
+pp <- list()
+n_batch <- 4
+```
+
+
+```{r}
+# Load data
+for (batch in seq(n_batch)) {
+gene_counts <- read_tsv(file.path(path, paste0("gene_counts_batch", batch, ".tsv"))) %>% 
+  rename(ensembl_gene_id = gene_id)
+# gene_counts_norm <- round(gene_counts[, -1]) %>%
+#   as.matrix(gene_counts) %>%
+#   vst() %>%
+#   as_tibble() %>%
+#   mutate(ensembl_gene_id = gene_counts$ensembl_gene_id) %>%
+#   relocate(ensembl_gene_id)
+
+metadata <- inner_join(gene_counts, gene_query, by = "ensembl_gene_id")
+
+# x <- "chromosome_name"
+# filter(metadata, !str_detect(!!sym(x), "CHR_")) %>% pull(!!sym(x)) %>% unique()
+
+metadata0 <- metadata %>%
+  group_by(ensembl_gene_id) %>%
+  dplyr::slice(1) %>%
+  ungroup()
+
+# plot_chr(metadata0)
+# plot_density_genes(gene_counts_norm, density = TRUE)
+# plot_density_genes(gene_counts_norm)
+
+# t(gene_counts_norm[, -1]) %>%
+#   set_colnames(pull(gene_counts, 1)) %>%
+#   plot_dispersion()
+# png(
+#   file.path(path, paste0("dispersion", ".temp.", "png")),
+#   units = "px",
+#   width = 1200*4,
+#   height = 575*4,
+#   res = 300
+# )
+# gene_counts_norm[, -1] %>%
+#   plot_dispersion(ind = TRUE)
+# dev.off()
+
+# pull(metadata, transcript_biotype) %>% fct_count() %>% arrange(desc(n)) %>% mutate(perc = n / nrow(metadata) *100) %>% View()
+# select(metadata, -c(matches("\\d{5}[AB]"))) %>% filter(ensembl_gene_id %in% cou0)
+# 
+# pull(metadata, transcript_biotype) %>% str_replace_all(".*(pseudogene)", "\\1") %>% str_replace_all("(IG)_.*", "\\1") %>% str_replace_all("(TR)_.*", "\\1") %>% str_replace_all(".*(decay)", "\\1") %>% str_replace_all("(misc_RNA)|(snRNA)|(miRNA)|(snoRNA)|(scaRNA)|(sRNA)|(scRNA)|(vault_RNA)|(Mt_ncRNA)|(Mt_tRNA)", "sRNA") %>% str_replace_all("Mt_rRNA", "rRNA") %>% str_replace_all("retained_intron", "lncRNA") %>% str_replace_all("(IG)|(TR)", "somatic recombination") %>% str_replace_all("(somatic recombination)|(TEC)|(rRNA)|(ribozyme)", "Others")  %>% str_replace_all("(lncRNA)|(sRNA)", "processed_transcript") %>% fct_count() %>% arrange(desc(n)) %>% mutate(perc = n / nrow(metadata) *100) %>% View()
+
+biotype <- pull(metadata, transcript_biotype) %>% 
+  str_replace_all(".*(pseudogene)", "Pseudogene") %>%
+  str_replace_all("(IG)_.*", "\\1") %>%
+  str_replace_all("(TR)_.*", "\\1") %>%
+  str_replace_all(".*(decay)", "Decayed") %>%
+  str_replace_all("(misc_RNA)|(snRNA)|(miRNA)|(snoRNA)|(scaRNA)|(sRNA)|(scRNA)|(vault_RNA)|(Mt_ncRNA)|(Mt_tRNA)", "sncRNA") %>%
+  str_replace_all("Mt_rRNA", "rRNA") %>% 
+  # str_replace_all("retained_intron", "lncRNA") %>% 
+  str_replace_all("(IG)|(TR)", "somatic recombination") %>% 
+  # str_replace_all("(somatic recombination)|(TEC)|(rRNA)|(ribozyme)", "Others") %>% 
+  str_replace_all("protein_coding", "CDS") %>%
+  str_replace_all("processed_transcript", "ncRNA")
+
+p <- list.map(
+  c("CDS", "Pseudogene", "rRNA", "lncRNA", "sncRNA"),
+  f(x, y) ~ {
+case_when(str_detect(biotype, x) ~ "A", TRUE ~ "B") %>%
+  mutate(metadata, biotype = .) %>%
+  group_by(ensembl_gene_id) %>%
+  arrange(biotype) %>%
+  slice(1) %>%
+  ungroup() %>%
+  perc_type() # %>%
+  # plotHistogram(
+  #   df = ., 
+  #   title = paste("%", x),
+  #   n = 10, 
+  #   dec = 1, 
+  #   color_title = brewer.pal(9, "Set1")[y], 
+  #   color_gradient = c("gray", brewer.pal(9, "Set1")[y])
+  # )
+  # plot_violin0(
+  #   title = paste("%", x),
+  #   cex_main = 19,
+  #   cex_sub = 13,
+  #   pch_alpha = .5,
+  #   pch_col = "gray20",
+  #   colour = brewer.pal(9, "Set1")[y]
+  #   ) +
+  # scale_y_continuous(label = label_number(suffix = "%"))
+  }
+)
+p2 <- perc_type(metadata0, val = "MT", col = "chromosome_name") # %>%
+  # plotHistogram(
+  #   df = ., 
+  #   title = "% MT",
+  #   n = 10, 
+  #   dec = 1, 
+  #   color_title = brewer.pal(9, "Set1")[8], 
+  #   color_gradient = c("gray", brewer.pal(9, "Set1")[8])
+  # )
+  # plot_violin0(
+  #   title = "% MT",
+  #   cex_main = 19,
+  #   cex_sub = 13,
+  #   pch_alpha = .5,
+  #   pch_col = "gray20",
+  #   colour = brewer.pal(9, "Set1")[8]
+  # ) +
+  # scale_y_continuous(label = label_number(suffix = "%"))
+  
+p3 <- case_when(pull(metadata, "strand") == "1" ~ "A", TRUE ~ "B") %>%
+    mutate(metadata, strand = .) %>%
+    group_by(ensembl_gene_id) %>%
+    arrange(strand) %>%
+    slice(1) %>%
+    ungroup() %>% 
+    perc_type(col = "strand") # %>%
+    # plot_violin0(
+    #   title = "% Strandness",
+    #   cex_main = 19,
+    #   cex_sub = 13,
+    #   pch_alpha = .5,
+    #   pch_col = "gray20",
+    #   colour = brewer.pal(8, "Set2")[6]
+    # ) +
+    # scale_y_continuous(label = label_number(suffix = "%"))
+
+p4 <- group_by(metadata, ensembl_gene_id) %>%
+  arrange(desc(ensembl_peptide_id)) %>%
+  slice(1) %>%
+  ungroup() %>% 
+  perc_type("ENSP", "ensembl_peptide_id") # %>%
+  # plot_violin0(
+  #   title = "% CDS",
+  #   cex_main = 19,
+  #   cex_sub = 13,
+  #   pch_alpha = .5,
+  #   pch_col = "gray20",
+  #   colour = brewer.pal(9, "Set1")[1]
+  # ) +
+  # scale_y_continuous(label = label_number(suffix = "%"))
+
+pp[[batch]] <- c(list(p4), p[-c(1, 5)], list(p2), list(p3), p[c(1, 5)])
+
 }
 
-counts0 <- gene_counts[, -1] %>% set_colnames(pull(gene_counts, 1))
-
-counts0 <- t(gene_counts0[, -1]) %>% set_colnames(pull(gene_counts0, 1) %>% str_remove_all("ENSG"))
-
-path_tsv <- file.path(golem::get_golem_wd(), "inst", "results", "tsv")
-png(
-  file.path(path_tsv, paste0("dispersion", ".temp.", "png")),
-  units = "px",
-  width = 1200*4,
-  height = 575*4,
-  res = 300
+titles <- c("CDS", "Pseudogene", "rRNA", "lncRNA", "MT", "Strandness", "CDS", "sncRNA")
+col <- c(brewer.pal(9, "Set1")[c(seq(4), 8)], brewer.pal(8, "Set2")[6], brewer.pal(9, "Set1")[c(1, 5)])
+list.map(
+  seq_along(pp[[1]]),
+  f(i, j) ~ list.map(
+    pp, 
+    pluck(., i)) %>%
+    compact() %>% 
+    list_cbind() %>% 
+    set_colnames(seq(n_batch)) %>% 
+    plot_violin0(
+      colour = colorRampPalette(c("white", col[j], "black"))(n_batch + 4)[c(3:(n_batch + 2))],
+      color_title = col[j],
+      title = titles[j],
+      pch_colour = "gray20",
+      pch_alpha = 0.5, 
+      stat = FALSE, 
+      wrap = 1
+    )
+) %>%
+plot_grid(
+  plotlist = .,
+  nrow = 2,
+  ncol = 4,
+  align = "vh"
 )
-gene_counts_norm[, -1] %>% set_colnames(colnames(.) %>% str_remove_all("05PB1")) %>% plot_dispersion()
-dev.off()
 
-apply(gene_counts[, -1] > 0, 2, sum) %>% `/`(nrow(gene_counts)) %>% plot_violin0(title = "") + scale_y_continuous(labels = label_percent())
+plot_grid(
+  plotlist = pp[[batch]],
+  nrow = 1,
+  ncol = 8,
+  align = "hv"
+)
+
+# group_by(metadata, ensembl_exon_id) %>%
+#   arrange(desc(ensembl_exon_id)) %>%
+#   slice(1) %>%
+#   ungroup() %>%
+#   perc_type("ENSE", "ensembl_exon_id") %>%
+#   plot_violin0(
+#     title = "% Exon",
+#     cex_main = 19,
+#     cex_sub = 13,
+#     pch_alpha = .5,
+#     pch_col = "gray20",
+#     colour = brewer.pal(9, "Set1")[1]
+#   ) +
+#   scale_y_continuous(label = label_number(suffix = "%"))
+
+
+rna <- t(select(metadata0, matches("\\d{5}[AB]"))) %>% 
+  as.data.frame() %>%
+  set_colnames(pull(metadata0, "ensembl_gene_id")) %>%
+  round()
+
+query <- sapply(
+  c("DDX3Y", "XIST"),
+  function(x)
+    filter(metadata0, hgnc_symbol == x) %>%
+    pull(ensembl_gene_id)
+)
+
+rna_gender <- select(rna, query) %>%
+  mutate(ID = rownames(.), Sample = rownames(.) %>% str_remove_all("[AB]05PB1$")) %>%
+  inner_join(gender, by = "Sample")
+
+list.map(
+  names(query), 
+  f(x, y) ~ {
+    select(rna_gender, c(x, "gender")) %>%
+      group_by(gender) %>%
+      group_split() %>%
+      as.list() %>%
+      list.map(f(i) ~ pull(i, x)) %>%
+      list_cbind() %>%
+      round() %>%
+      set_colnames(unique(pull(rna_gender, "gender"))) %>%
+      plot_violin0(
+        wrap = 5,
+        wrap_title = 20,
+        colour = brewer.pal(10, "Paired")[seq(2) + 2 * y],
+        stat = TRUE,
+        title = x
+      ) +
+      scale_y_continuous(
+        trans = log10_trans(),
+        breaks = c(1, paste0("1e", seq(6))) %>% as.numeric(),
+        labels = label_number_auto()
+      )
+  }
+) %>%
+  plot_grid(
+    plotlist = .,
+    nrow = 1,
+    ncol = 2,
+    align = "hv"
+  )
+
+filter(clinic, C_2643_3796 %in% c("26006", "26107")) %>%
+  select(C_2643_3797, C_2643_3798, C_2643_3803, C_2649_3891, C_2649_3895) %>%
+  View()
 ```
