@@ -200,10 +200,10 @@ gender <- select(clinic, c("C_2643_3796", "C_2649_3888")) %>%
   set_colnames(c("Sample", "gender")) %>%
   filter(!is.na(gender))
 pp <- list()
-n_batch <- 4
+n_batch <- 5
 ```
 
-
+# Parse data
 ```{r}
 # Load data
 for (batch in seq(n_batch)) {
@@ -345,8 +345,11 @@ p4 <- group_by(metadata, ensembl_gene_id) %>%
 pp[[batch]] <- c(list(p4), p[-c(1, 5)], list(p2), list(p3), p[c(1, 5)])
 
 }
+```
 
-titles <- c("CDS", "Pseudogene", "rRNA", "lncRNA", "MT", "Strandness", "CDS", "sncRNA")
+# Main plot
+```{r}
+titles <- c("CDS", "Pseudogene", "rRNA", "lncRNA", "MT", "Strandness", "CDS ", "sncRNA")
 col <- c(brewer.pal(9, "Set1")[c(seq(4), 8)], brewer.pal(8, "Set2")[6], brewer.pal(9, "Set1")[c(1, 5)])
 list.map(
   seq_along(pp[[1]]),
@@ -380,6 +383,8 @@ plot_grid(
   align = "hv"
 )
 
+# list.cbind(pp[[5]]) %>% as.data.frame() %>% set_colnames(titles) %>% rownames_to_column(var = "ID")  %>% arrange(desc(CDS)) %>% head()
+
 # group_by(metadata, ensembl_exon_id) %>%
 #   arrange(desc(ensembl_exon_id)) %>%
 #   slice(1) %>%
@@ -394,8 +399,10 @@ plot_grid(
 #     colour = brewer.pal(9, "Set1")[1]
 #   ) +
 #   scale_y_continuous(label = label_number(suffix = "%"))
+```
 
-
+# Gender plot
+```{r}
 rna <- t(select(metadata0, matches("\\d{5}[AB]"))) %>% 
   as.data.frame() %>%
   set_colnames(pull(metadata0, "ensembl_gene_id")) %>%
