@@ -66,8 +66,8 @@ trans_coord <- function(coord) {
 ```{r}
 path <- golem::get_golem_wd()
 cwd <- file.path(path, "inst", "extdata")
-raw_counts <- read_tsv(file.path(cwd, "gene_counts.tsv")) %>% column_to_rownames("GeneName")
-batch <- read_tsv(file.path(cwd, "batch_rna.tsv")) %>% mutate(Sample = paste0(Sample, "05PB1"), batch = as.factor(batch))
+raw_counts <- read_tsv(file.path(cwd, "gene_counts.tsv")) %>% column_to_rownames("gene_id")
+batch <- read_tsv(file.path(cwd, "batch_rna.tsv")) %>% mutate(batch = as.factor(batch))
 batch <- data.frame(Sample = colnames(raw_counts)) %>% full_join(batch, by = "Sample") %>% column_to_rownames("Sample") %>% pull(batch)
 clinic <- read_tsv(file.path(cwd, "clinic.tsv")) %>% 
   select(c("C_2643_3796", "C_2649_3888", "C_2649_3895", "C_2643_3803", "C_2649_3890")) %>%
@@ -78,6 +78,8 @@ clinic <- read_tsv(file.path(cwd, "clinic.tsv")) %>%
 combat_counts <- as.matrix(raw_counts) %>%
     ComBat_seq(batch) %>%
     as.data.frame()
+norm_rna0 <- round(raw_counts) %>% as.matrix() %>% vst()
+colnames(norm_rna0) <- colnames(norm_rna0) %>% str_remove_all("05PB1")
 norm_rna <- round(combat_counts) %>% as.matrix() %>% vst()
 colnames(norm_rna) <- colnames(norm_rna) %>% str_remove_all("05PB1")
 ncomp <- 2
@@ -152,7 +154,7 @@ res_dist <- get_dist(t(norm_rna), stand = FALSE, method = hc_metric)
 mds <- cmdscale(res_dist, k = ncomp, eig = TRUE)
 mds$points[, 1] <- mds$points[, 1] * -1
 (mds$eig / sum(mds$eig[mds$eig > 0]) * 100) %>%
-  plot_dimred(mds$points, axis, eig = .)
+  plot_dimred(trans_coord(mds$points), axis, eig = .)
 ```
 
 ```{r som}
@@ -193,7 +195,7 @@ res_clus <- hclust(res_dist, method = "ward.D2")
 df <- as.matrix(res_dist)
 annot <- data.frame(Batch = batch)
 rownames(annot) <- rownames(t(norm_rna))
-row_col <- get_colors()[seq(4)] %>% set_names(unique(batch)) %>% list(Batch = .)
+row_col <- get_colors()[c(1, 3:5, 2)] %>% set_names(unique(batch)) %>% list(Batch = .)
 pheatmap(
     df,
     color = colorRampPalette(colors_ind)(100),
