@@ -416,7 +416,7 @@ query <- sapply(
 )
 
 rna_gender <- select(rna, query) %>%
-  mutate(ID = rownames(.), Sample = rownames(.) %>% str_remove_all("[AB]05PB1$")) %>%
+  mutate(ID = rownames(.), Sample = rownames(.) %>% str_remove_all("[AB]05PB\\d$")) %>%
   inner_join(gender, by = "Sample")
 
 list.map(
@@ -455,3 +455,46 @@ filter(clinic, C_2643_3796 %in% c("26006", "26107")) %>%
   select(C_2643_3797, C_2643_3798, C_2643_3803, C_2649_3891, C_2649_3895) %>%
   View()
 ```
+
+```{r}
+list.map(
+  c("DRD1", "ALB", "MYL1", "NPPA", "GAPDH", "ACTB", "TMSB4X", "B2M"),
+  f(i, j) ~ {
+    filter(metadata0, hgnc_symbol == i) %>% 
+      slice(1) %>% 
+      select(matches("[AB]05PB\\d$")) %>% 
+      unlist() %>% 
+      plot_violin0(
+        title = i,
+        colour = get_colors1()[j],
+        pch_alpha = 0.5,
+        lim1 = 1
+      ) +
+      scale_y_continuous(
+        trans = log10_trans(),
+        breaks = c(1, paste0("1e", seq(6))) %>% as.numeric(),
+        labels = label_number_auto(),
+        limits = c(1, NA)
+      )
+    }
+  ) %>%
+  plot_grid(
+    plotlist = .,
+    nrow = 2,
+    ncol = 4,
+    align = "hv"
+  )
+
+apply(select(gene_counts, -1), 2, sum) %>% 
+    plot_violin0(
+      title = "Total number of counts / sample",
+      pch_alpha = 0.5
+    )  +
+    scale_y_continuous(
+        trans = log10_trans(),
+        breaks = c(1, paste0("1e", seq(8))) %>% as.numeric(),
+        labels = label_number_auto(),
+        limits = c(1e6, 1e8)
+    )
+```
+
