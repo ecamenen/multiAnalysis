@@ -257,16 +257,16 @@ plot_enrich <- function(x, n = 20, title = NULL, type = "go", cex = 1, ratio = 5
     df0 <- filter(df, Adjusted.P.value <= 0.05)
     if (nrow(df0) < n)
       df0 <- df
-    df <- arrange(df0, desc(generatio)) %>%
+    df <- arrange(df0, Adjusted.P.value) %>%
       head(n) %>%
       mutate(
         label = {
           str_remove_all(Term, "\\(.*") %>%
             str_remove_all("((ORPHA)|(WP)|(HSA)|(R-)).*") %>%
-            str_trunc(wrap) %>%
+            str_trunc2(wrap) %>%
             to_title()
         },
-        rank = row_number(generatio)
+        rank = rev(row_number(Adjusted.P.value))
       )
 
     colour_x <- ifelse(df$Adjusted.P.value <= 0.05, get_colors()[1], "gray50")
@@ -275,7 +275,7 @@ plot_enrich <- function(x, n = 20, title = NULL, type = "go", cex = 1, ratio = 5
         scale_size(range = c(0.5, 12), name = "Gene count") +
         labs(title = title, x = "Gene ratio", y = "") +
       scale_y_continuous(breaks = df$rank, labels = df$label)+
-      scale_x_continuous(breaks = pretty_breaks(n = 4), labels = label_percent()) +
+      scale_x_continuous(breaks = pretty_breaks(n = 3), labels = label_percent(1)) +
       scale_size_continuous(breaks = pretty_breaks(n = 3), labels = label_number_auto())
       theme_enrich(p, cex, colour = colour_x)  +
         theme(
@@ -286,6 +286,9 @@ plot_enrich <- function(x, n = 20, title = NULL, type = "go", cex = 1, ratio = 5
             vjust = 1,
             colour = "gray50"
           )
+        ) +
+        guides(
+          size = guide_legend(order = 1)
         )
         # expand_limits(y = max(df$generatio) + max(df$generatio) / ratio)
 }
@@ -554,7 +557,7 @@ cnetplot0 <- function(
     wrap = 20,
     n = 5,
     node_label = "all"
-) {
+    ) {
   # foldChange = rep(1, length(highlighted))
   # names(foldChange) <- highlighted
 
@@ -569,19 +572,19 @@ cnetplot0 <- function(
     color.params = list(foldChange = foldChange, category = "gray50"),
     shadowtext = "none",
     showCategory = n
-  )
-  if (is(x, "compareClusterResult")) {
-    p +
-      scale_fill_manual(
-        values = get_colors()[seq_along(x@geneClusters)],
-        name = ""
-      ) +
-      guides(color = "none")
-  } else {
-    p +
-      scale_color_gradientn(colours = colors_ind, name = "FDR") +
-      theme(legend.position = "right")
-  }
+    )
+    if (is(x, "compareClusterResult")) {
+      p +
+        scale_fill_manual(
+          values = get_colors()[seq_along(x@geneClusters)],
+          name = ""
+        ) +
+        guides(color = "none")
+    } else {
+      p +
+        scale_color_gradientn(colours = colors_ind, name = "FDR") +
+        theme(legend.position = "right")
+    }
   # p$data$name <- to_title(p$data$name)
   # if (!is.null(highlighted)) {
   #   highlighted0 <- p$data$name %in% highlighted
@@ -615,7 +618,7 @@ get_enrich_genes <- function(x, type = "kegg") {
         ) %>%
         pull("SYMBOL") %>%
         sort()
-    })
+      })
 }
 
 heatplot0 <- function(x, foldChange, n = 15, wrap = 50) {
@@ -658,7 +661,7 @@ get_kegg_path <- function(x, query) {
     theme(legend.position = "none")
 }
 
-get_genes_path <- function(x, query, name = "Genes") {
+get_genes_path <- function(x, query, name = "Genes", detect = "Term", cutoff = 0.05) {
   list.map(
     query,
     f(i) ~ {
@@ -666,9 +669,27 @@ get_genes_path <- function(x, query, name = "Genes") {
         x,
         f(j) ~ {
           as.data.frame(j) %>%
-            filter(Adjusted.P.value <= 0.05) %>%
-            filter(str_detect(Term, paste0("^", i) %>% str_remove_all("\\.\\.\\.$"))) %>%
-            pull(name)  %>%
+            filter(Adjusted.P.value <= cutoff) -> temp
+          if(nrow(temp) == 0) 
+            return(NULL)
+          if (detect == "Genes") {
+            temp <- lapply(
+              seq(nrow(temp)), 
+              function(x) {
+                slice(temp, x) %>%
+                  pull(detect) %>%
+                  str_split(";") %>% 
+                  unlist() %>%
+                  str_detect(paste0("^", i, "$") %>% str_remove_all("\\.\\.\\.$")) %>%
+                  any()
+              }
+              ) %>% 
+              unlist() %>%
+              filter(temp, .)
+          } else {
+            temp <- filter(temp, str_detect(!!sym(detect), paste0("^", i) %>% str_remove_all("\\.\\.\\.$")))
+          }
+            pull(temp, name)  %>%
             str_split(";") %>% unlist()
         }) %>% unlist() %>% unique() %>% sort() %>% unname()
     }
