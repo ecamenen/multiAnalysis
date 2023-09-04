@@ -18,8 +18,8 @@ knitr::opts_chunk$set(
 ```{r setup}
 library(multiAnalysis)
 set.seed(123)
-set_analysis(block_name = "clinic_still_processed", to_remove = c("1007", "1014"))
-hc_method <- "ward.D2"
+block_name <- "t_drugs"
+set_analysis(block_name = block_name, type = "qual")
 hc_metric <- "spearman"
 hc_index <- "silhouette"
 k <- 2
@@ -61,7 +61,7 @@ if (block_name == "t_aidai") {
   blocks <- apply(blocks, 2, function(x) (x == 0) %>% `!` %>% which() %>% length()) %>% `>`(2) %>% which() %>% select(blocks, .)
 }
 
-if (block_name == "t_muscu") {
+if (block_name %in% c("t_muscu", "t_drugs")) {
   blocks <- apply(blocks, 2, function(x) sum(x, na.rm = TRUE))  %>% `>`(2) %>% which() %>% select(blocks, .)
 }
   

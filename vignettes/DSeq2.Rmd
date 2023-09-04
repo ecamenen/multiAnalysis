@@ -18,15 +18,20 @@ knitr::opts_chunk$set(
 ```{r setup}
 library(multiAnalysis)
 library(tximport)
-# library(rhdf5)
+library(enrichplot)
+library("ggupset")
+# library(ggVennDiagram)
 cwd <- golem::get_golem_wd()
+# library(rhdf5)
 # Load matrix for treatment
-set_analysis(block_name = "emna_treat", type = "qual", cwd = cwd)
+set_analysis(block_name = "clinic", type = "qual", cwd = cwd)
 # set_analysis(block_name = "still_manif", type = "qual")
 # Extract variable for discrimination
 
-load(file.path(path1, "clinic_transf.rda"))
-batches <- clinic_transf$batch %>% set_names(clinic_transf$immun_aid_identifier)
+# load(file.path(path1, "clinic_transf.rda"))
+# batches <- clinic_transf$batch %>% set_names(clinic_transf$immun_aid_identifier)
+batch_df <- read_tsv(file.path(cwd, "inst", "extdata", "batch_rna.tsv")) %>% filter(str_detect(Sample, "A"))
+batches <- pull(batch_df, 2) %>% set_names(pull(batch_df, 1) %>% str_remove_all("A") %>% as.numeric())
 
 id_ctrl <- filter(clinic_transf, str_detect(disease, "control")) %>% pull(immun_aid_identifier)
 
@@ -147,7 +152,7 @@ counts_matrix <- l_visits[["A"]]
 gene_name <- str_remove_all(counts_matrix$GeneName, "\\.*")
 # Filter by common rows
 common_rows <- Reduce(intersect, list(colnames(counts_matrix), rownames(blocks), names(batches)))
-counts_matrix <- list.cbind(l_visits) %>% select(-contains("GeneName"))
+counts_matrix <- lapply(l_visits, function(i) select(i, matches(paste0("^", common_rows, "$", collapse = "|")))) %>% list.cbind() %>% select(-contains("GeneName"))
 
 blocks <- data.frame(blocks)[common_rows, ] %>% select(contains(c("Mucocutaneous", "Musculoskeletal", "Urticaria", "Myocarditis", "Anti.IL1", "Anti.IL6", "Corticosteroid", "DMARDs", "Kinase.Inhibitor", "Naive")))
 
@@ -204,6 +209,22 @@ duplicates <- gene_query[duplicated(gene_query$ensembl_gene_id) %>% which(), 1]
 gene_query <- gene_query[!gene_query$ensembl_gene_id %in% duplicates, ] %>% rbind(data.frame(ensembl_gene_id = c("ENSG00000276085"), hgnc_symbol = c("CCL3L1/3")))
 use_data(gene_query, overwrite = TRUE)
 ```
+
+```{r}
+blocks <- lapply(
+    c("control", "osteitis"),
+    function(x) filter(blocks, str_detect(C_2643_3798, x)) %>% rownames()
+) %>% 
+    list.map(f(i, k) ~ data.frame(id = i, group = factor(k - 1))) %>%
+    list.rbind() %>%
+    arrange(id) %>%
+    mutate(batch = batches[names(batches) %in% id] %>% factor()) %>%
+    set_rownames(pull(., id) %>% paste0("A.", .)) %>%
+    select(-id) %>%
+    list() %>%
+    set_names("Control vs Disease")
+```
+
 
 ```{r}
 GCC_V2 <- c(3005, 9002, 25008, 26102)[-1]
@@ -305,7 +326,7 @@ counts_combat_HUGO <- ensembl_to_hugo(ensembl_hgnc, counts_combat)
 # comparison <- cbind(setA, setB)
 # exprs_threshold <- 1 * NCOL(counts_matrix)
 l_de0 <- list.map(blocks, f(i, j) ~ {
-  countData <- filtered_counts %>% select(colnames(.) %in% rownames(i) %>% which())
+  countData <- filtered_counts %>% select(rownames(i))
   if (j < 5)
     DESeqDataSetFromMatrix(
         countData = countData,
@@ -347,7 +368,7 @@ l_de2 <- list.map(l_de, f(i) ~ i %>%
 #     c("FCGR1A", "HIF1A", "ICAM1", "SOD2", "TNFAIP6", "CD3D", "CD3E", "CD3G", "CD8A", "LCK"),
 #     c("BCL6", "IL10", "VEGFA")
 # )
-top_genes <- list.map(l_de2, get_top0(., n = 10))
+top_genes <- list.map(l_de2, get_top0(., n = 15))
 list.map(l_de2, f(i, j, k) ~ volcano_plot(i, top_genes = top_genes[[j]], cex = 1, legend = "none", title = "") + xlab("") + ylab("")) -> p2
 # for (pl in names(p2)) {
 #     save_tiff(p2[[pl]], file.path(path_img, paste0("volcano2_", pl, ".tiff")), 4000, 3000)
@@ -494,12 +515,16 @@ top_genes <- list.map(c("Up", "Down"), f(i, j) ~ list.map(de_genes1, .[[j]]))
 # list.map(de_genes2, .[[1]])
 # plot_venn1(top_genes[[1]], ratio = .4, wrap = 20)
 top_genes0 <- list.map(c("Up", "Down"), f(i, j, k) ~ top_genes[[j]] %>% set_names(paste0(names(.), " (", i, ")")))
+```
+
+```{r, eval = FALSE}
 get_intersection(top_genes[[2]])
 get_intersection(top_genes[[2]], 2)
 get_intersection(top_genes[[2]], 3)
 # plot_venn1(de_genes3, ratio = .4, wrap = 20)
 filtered <- names(top_genes[[1]]) %>% str_detect("Naive") %>% which()
 ```
+
 
 # Enrichment analysis
 ```{r}
@@ -538,8 +563,8 @@ list.map(
           plot_enrich(
             i,
             n = 15,
-            title = str_replace_all(dbs[k], "_", " "),
-            wrap = 45
+            title = str_replace_all(k, "_", " "),
+            wrap = 35
             )
           }
         ) %>%
@@ -589,6 +614,10 @@ list.map(
 #     ncol = 2,
 #     align = "hv"
 # )
+```
+
+```{r, eval = FALSE} 
+list.map(enriched[[1]][[1]], f(j) ~ filter(j, Adjusted.P.value <= 0.05) %>% select(c(1, 4, 9))) %>>% list.filter(.i != 3) %>% keep(function(x) nrow(x) > 0)
 list.map(enriched, f(i) ~ list.map(i, f(j) ~ filter(j, Adjusted.P.value <= 0.05) %>%
     dplyr::select(c(1, 4, 9)) %>%
     head(15)) %>% keep(function(x) nrow(x) > 0)) %>% compact() -> tmp0
@@ -613,6 +642,36 @@ list.map(dbs, f(j) ~ list.filter(tmp0, f(i) ~ !is.null(i[[j]])) %>% list.names()
 # plot_enrich_gsea(ck0)
 # cnetplot0(ck0, cex = 1.5, n = 15)
 ```
+
+```{r}
+down <- c("cytokine receptor activity", "IL-2/STAT5 Signaling", "KRAS Signaling Up", "Inflammatory Response", "Interleukin-10 Signaling")
+c("TNF-alpha Signaling via NF-kB", "IL-6/JAK/STAT3 Signaling", "MHC class II protein binding", "negative regulation of toll-like receptor signaling pathway", "inflammatory response", 
+  "regulation of T cell differentiation", "negative regulation of T cell differentiation", "regulation of T-helper 1 cell cytokine production",
+  "positive regulation of receptor signaling pathway via STAT", "positive regulation of receptor signaling pathway via JAK-STAT", "positive regulation of T-helper 1 cell cytokine production",
+  "regulation of MAPK cascade", "positive regulation of MAPK cascade", "regulation of MAP kinase activity", "MAPK cascade")
+
+up <- c("Interferon Gamma Response", "Inflammatory Response", "Interferon Alpha Response", "Complement")
+c("TNF-alpha Signaling via NF-kB", "Complement Activation", "regulation of chemokine-mediated signaling pathway", "negative regulation of leukocyte migration")
+
+(up_genes <- get_genes_path(enriched[[1]][[1]], up) %>% suppressMessages())
+(down_genes <- get_genes_path(enriched[[2]][[1]], down) %>% suppressMessages())
+
+top_genes0 <- c(up_genes, down_genes) %>% unlist() %>% sort() %>% unique() %>% list() %>% set_names(names(blocks))
+
+immu_genes <- c("WARS1", "BATF2", "FCGR1A", "LAP3", "GBP2", "C2")
+# immu_genes <- c("CCL4", "TNF", "CXCL2", "IL1B")
+# ADM, IRF1, PELI1, ABCA1
+immu_genes %in% unlist(up_genes)
+lapply(immu_genes, function(x) list.search(up_genes, .[. == x]) %>% names())
+
+(diff_paths <- get_genes_path(enriched[[1]][[1]], query = immu_genes, name = "Term", detect = "Genes") %>% suppressMessages())
+
+top_genes0 <- list.map(l_de2, f(i) ~ get_top0(i, n = 50) %>%
+    rownames() %>%
+    str_remove_all("_\\d") %>%
+    unique())
+```
+
 
 ```{r, eval = FALSE}
 genes_path <- get_genes_path(enriched[[1]][[1]], c("Complement Activation", "Interferon Alpha Response", "Interferon Gamma Response", "Classical Antibody-Mediated Complement Activation"))
@@ -692,10 +751,10 @@ blocks2 <- list.map(
     ) %>% Reduce(cbind, .) %>% t()
   }
 )
-j <- 3
+j <- 1
 i <- names(blocks1)[j]
 # colnames(blocks2[[i]]) <- rownames(blocks1[[i]]) <- rownames(blocks1[[i]]) %>% str_remove_all("A\\.")
-colnames(blocks2[[i]]) <- rownames(blocks1[[i]]) <- str_replace_all(rownames(blocks1[[i]]), "([AB])\\.(.*)", "\\2\\-\\1")
+colnames(blocks2[[i]]) <- rownames(blocks1[[i]]) <- str_replace_all(rownames(blocks1[[i]]), "([AB])\\.(.*)", "\\2\\-\\1") %>% str_remove_all("\\-[AB]")
 # names_levels <- c("AOSD", "SOJIA")
 names_levels <- str_split(i, " vs ") %>% pluck(1)
 # names_levels <- c("Naive", "GC-Corticoid", "GC-Corticoid + aIL1", "aIL1 only")
@@ -974,7 +1033,7 @@ plot_grid(
 # Common pathways between models
 list.map(enrich_kegg, list.map(., f(j) ~ sort(j$Description))) -> pathways
 pathways0 <- c(pathways[[1]][-2], pathways[[2]]) %>% set_names(paste(c(rep("Up", 2), rep("Down", 4)), names(.)))
-plot_venn1(pathways0[-c(2:3)])
+plot_venn1(pathways0[-c(2:3)]), label = FALSE)
 get_intersection(pathways0[-c(2:3)])
 
 get_kegg_path(enrich_kegg, "Human T")
@@ -983,4 +1042,6 @@ genes <- get_enrich_genes(c(enrich_kegg[[1]], enrich_kegg[[2]]), "Human T")  %>%
 
 plot_venn1(genes, label = FALSE, colour = get_colors()[c(1, 4, 6, 8, 2:3, 5)])
 get_intersection0(genes[-c(2:3)])
+
+as.tibble(enrich_kegg[[2]][[4]]) %>%  filter(str_detect(Description,  "Human T")) %>% pull(geneID) %>% str_split("/") %>% pluck(1) %>% bitr(fromType = "ENTREZID", toType = "ALIAS", OrgDb = get(organism)) %>% pull(2)
 ```
