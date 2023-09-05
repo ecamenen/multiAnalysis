@@ -28,12 +28,13 @@ set_analysis(block_name = "clinic", type = "qual", cwd = cwd)
 # set_analysis(block_name = "still_manif", type = "qual")
 # Extract variable for discrimination
 
-# load(file.path(path1, "clinic_transf.rda"))
+data(clinic)
 # batches <- clinic_transf$batch %>% set_names(clinic_transf$immun_aid_identifier)
 batch_df <- read_tsv(file.path(cwd, "inst", "extdata", "batch_rna.tsv")) %>% filter(str_detect(Sample, "A"))
-batches <- pull(batch_df, 2) %>% set_names(pull(batch_df, 1) %>% str_remove_all("A") %>% as.numeric())
+batches <- pull(batch_df, 2) %>% set_names(pull(batch_df, 1) %>% str_remove_all("A05PB\\d") %>% as.numeric())
+batches["6052"] <- 4
 
-id_ctrl <- filter(clinic_transf, str_detect(disease, "control")) %>% pull(immun_aid_identifier)
+id_ctrl <- filter(clinic, str_detect(C_2643_3798, "control")) %>% pull(C_2643_3796) %>% as.numeric()
 
 if (!file.exists(file.path(path_img, "shrinked"))) {
     dir.create(file.path(path_img, "shrinked"))
@@ -51,70 +52,7 @@ library(organism, character.only = TRUE)
 ```{r}
 # Load the count matrix
 path <- file.path(cwd, "inst", "extdata")
-processed_matrix <- read_tsv(file = file.path(path, "processed_gene_matrix.tsv"))
-counts_matrix <- read_delim(file = file.path(path, "raw_gene_matrix.txt"), delim = " ", skip = 1, col_names = colnames(processed_matrix))
-```
-
-# Extract transcript files
-```{r, eval = FALSE}
-transcript_counts <- list.map(
-    seq(3),
-    f(i) ~ {
-        list.map(
-            list.files(
-                path = file.path(path, "RNASeq", "transcript_counts", paste0("Batch", i)),
-                full.names = TRUE,
-                pattern = "tsv"
-            ),
-            f(i) ~ {
-                read_tsv(i) %>%
-                    select(target_id, est_counts) %>%
-                    set_colnames(c("id", str_extract(i, "\\d{5}[AB]05PB1")))
-            }
-        ) %>% Reduce(function(x, y) full_join(x, y, by = "id"), .)
-    }
-) %>% Reduce(function(x, y) full_join(x, y, by = "id"), .)
-# use_data(transcript_counts, overwrite = TRUE)
-```
-
-# Extract kallisto files
-```{r, eval = FALSE}
-kallisto_files0 <- list.map(
-    c("First", "Second", "Third"),
-    f(i) ~ {
-        list.map(
-            list.files(
-                path = file.path(path, "kallisto", paste0(i, "Batch_h5files")),
-                full.names = TRUE,
-                pattern = "h5"
-            ), f(i) ~ {
-                tmp <- H5Fopen(i)
-                # h5closeAll()
-                data.frame(tmp$est_counts) %>% set_colnames(c(str_extract(i, "\\d{5}[AB]05PB1")))
-            }
-        ) %>% Reduce(cbind, .)
-    }
-) %>% Reduce(cbind, .)
-```
-
-# Extract kallisto files
-```{r, eval = FALSE}
-tr_files <- list.map(
-    seq(3),
-    f(i) ~ {
-        list.files(
-            path = file.path(path, "RNASeq", "transcript_counts", paste0("Batch", i)),
-            full.names = TRUE,
-            pattern = "tsv"
-        )
-    }
-) %>% unlist()
-tr_names <- read_tsv(tr_files[1])$target_id %>% str_remove_all("\\.*")
-gene_query <- getBM(
-    attributes = c("ensembl_transcript_id", "hgnc_symbol"),
-    mart = db_annot
-)
-tximport(., ignoreTxVersion = TRUE, type = "kallisto", txOut = TRUE, tx2gene = tx2gene, ignoreAfterBar = TRUE)
+counts_matrix <- read_tsv(file = file.path(path, "gene_counts.tsv"))
 ```
 
 # Extract visits and intersect common rows between data
@@ -133,8 +71,8 @@ l_visits <- list.map(
 
 # Formatting the patient names
 col_names <- list.map(l_visits, f(.) ~ {
-    colnames(.) %>%
-        str_remove_all("(A|B)05PB1") %>%
+    colnames(.)[-1] %>%
+        str_remove_all("(A|B)05PB\\d") %>%
         as.numeric() %>%
         sort()
 })
@@ -143,18 +81,18 @@ col_names <- list.map(l_visits, f(.) ~ {
 l_visits <- list.map(
     c("A", "B"),
     f(i) ~ {
-        set_colnames(l_visits[[i]], colnames(l_visits[[i]]) %>% str_replace_all(paste0("0?(\\d{4})(A|B)05PB1"), "\\1")) %>%
-            select(c("GeneName", as.character(col_names[[i]])))
+        set_colnames(l_visits[[i]], colnames(l_visits[[i]]) %>% str_replace_all(paste0("0?(\\d{4})(A|B)05PB\\d"), "\\1")) %>%
+            select(c("gene_id", as.character(col_names[[i]])))
     }
-) 
+)
 # list.map(c("A", "B"), f(i) ~ l_visits[[i]] %>% select(intersect(colnames(.), rownames(blocks))) %>% ncol() %>% rep(i, .)) %>% unlist() %>% unname() %>% plot_piechart(cex = 30, hsize = 1.5, title = "", label = FALSE, colour = brewer.pal(9, "Paired")[7:8])
 counts_matrix <- l_visits[["A"]]
-gene_name <- str_remove_all(counts_matrix$GeneName, "\\.*")
+gene_name <- str_remove_all(counts_matrix$gene_id, "\\.*")
 # Filter by common rows
 common_rows <- Reduce(intersect, list(colnames(counts_matrix), rownames(blocks), names(batches)))
-counts_matrix <- lapply(l_visits, function(i) select(i, matches(paste0("^", common_rows, "$", collapse = "|")))) %>% list.cbind() %>% select(-contains("GeneName"))
+counts_matrix <- lapply(l_visits, function(i) select(i, matches(paste0("^", common_rows, "$", collapse = "|")))) %>% list.cbind() %>% select(-contains("gene_id"))
 
-blocks <- data.frame(blocks)[common_rows, ] %>% select(contains(c("Mucocutaneous", "Musculoskeletal", "Urticaria", "Myocarditis", "Anti.IL1", "Anti.IL6", "Corticosteroid", "DMARDs", "Kinase.Inhibitor", "Naive")))
+blocks <- data.frame(blocks)[common_rows, ] # %>% select(contains(c("Mucocutaneous", "Musculoskeletal", "Urticaria", "Myocarditis", "Anti.IL1", "Anti.IL6", "Corticosteroid", "DMARDs", "Kinase.Inhibitor", "Naive")))
 
 # c(list.map(l_visits, f(i) ~ colnames(i)[-1]), CLINIC = list(rownames(blocks)))
 # plot_venn1(temp, color = c("#FED976", "#FD8D3C", "#377EB8"))
@@ -226,7 +164,7 @@ blocks <- lapply(
 ```
 
 
-```{r}
+```{r, eval = FALSE}
 GCC_V2 <- c(3005, 9002, 25008, 26102)[-1]
 # batches[names(batches) %in% gccs]
 aIL1_V2 <- c(13005, 13010, 13016)
