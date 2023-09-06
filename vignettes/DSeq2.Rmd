@@ -22,23 +22,26 @@ library(enrichplot)
 library("ggupset")
 # library(ggVennDiagram)
 cwd <- golem::get_golem_wd()
-# library(rhdf5)
-# Load matrix for treatment
 set_analysis(block_name = "clinic", type = "qual", cwd = cwd)
-# set_analysis(block_name = "still_manif", type = "qual")
-# Extract variable for discrimination
 
-data(clinic)
-# batches <- clinic_transf$batch %>% set_names(clinic_transf$immun_aid_identifier)
+blocks <- lapply(
+    seq(5),
+    function(i) {
+        read_excel(
+            path = file.path(golem::get_golem_wd(), "inst", "extdata", "Updated List of patients- Batch1,2,3, 4 and 5 June 2023.xlsx"),
+            skip = 1,
+            sheet = i
+        ) %>% select(contains(c("Patient", "Disease")))
+    }
+) %>% list.rbind() %>%
+  mutate(`Patient ID` = as.numeric(`Patient ID`)) %>%
+  distinct() %>%
+  filter(!(`Patient ID` == "6019" & str_detect(Disease, "unknown"))) %>%
+  set_rownames(pull(., 1))
+
 batch_df <- read_tsv(file.path(cwd, "inst", "extdata", "batch_rna.tsv")) %>% filter(str_detect(Sample, "A"))
 batches <- pull(batch_df, 2) %>% set_names(pull(batch_df, 1) %>% str_remove_all("A05PB\\d") %>% as.numeric())
 batches["6052"] <- 4
-
-id_ctrl <- filter(clinic, str_detect(C_2643_3798, "control")) %>% pull(C_2643_3796) %>% as.numeric()
-
-if (!file.exists(file.path(path_img, "shrinked"))) {
-    dir.create(file.path(path_img, "shrinked"))
-}
 
 setEnrichrSite("Enrichr")
 # listEnrichrDbs()$libraryName[listEnrichrDbs()$libraryName %>% grepl("orphanet", ., ignore.case = TRUE)]
@@ -151,7 +154,7 @@ use_data(gene_query, overwrite = TRUE)
 ```{r}
 blocks <- lapply(
     c("control", "osteitis"),
-    function(x) filter(blocks, str_detect(C_2643_3798, x)) %>% rownames()
+    function(x) filter(blocks, str_detect(Disease, x)) %>% rownames()
 ) %>% 
     list.map(f(i, k) ~ data.frame(id = i, group = factor(k - 1))) %>%
     list.rbind() %>%
@@ -605,6 +608,23 @@ lapply(immu_genes, function(x) list.search(up_genes, .[. == x]) %>% names())
 (diff_paths <- get_genes_path(enriched[[1]][[1]], query = immu_genes, name = "Term", detect = "Genes") %>% suppressMessages())
 
 top_genes0 <- list.map(l_de2, f(i) ~ get_top0(i, n = 50) %>%
+    rownames() %>%
+    str_remove_all("_\\d") %>%
+    unique())
+```
+
+```{r}
+enriched0 <- enriched[[1]][[1]][c(seq(2), 4:6)]
+enrich_genes0 <- c(
+    get_genes_path(enriched0, "complement") %>% format_path() %>% .[seq(3)],
+    get_genes_path(enriched0, "inflam") %>% format_path(),
+    get_genes_path(enriched0, "stat") %>% format_path(),
+    get_genes_path(enriched0, "interferon") %>% format_path()
+)
+
+top_genes0 <- enrich_genes0 %>% unlist() %>% unname() %>% unique() %>% sort() %>% list() %>% set_names(names(enriched[[1]]))
+
+top_genes1 <- list.map(l_de2, f(i) ~ get_top0(i, n = 50) %>%
     rownames() %>%
     str_remove_all("_\\d") %>%
     unique())
