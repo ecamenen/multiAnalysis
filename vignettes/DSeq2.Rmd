@@ -24,20 +24,22 @@ library("ggupset")
 cwd <- golem::get_golem_wd()
 set_analysis(block_name = "clinic", type = "qual", cwd = cwd)
 
-blocks <- lapply(
-    seq(5),
-    function(i) {
-        read_excel(
-            path = file.path(golem::get_golem_wd(), "inst", "extdata", "Updated List of patients- Batch1,2,3, 4 and 5 June 2023.xlsx"),
-            skip = 1,
-            sheet = i
-        ) %>% select(contains(c("Patient", "Disease")))
-    }
-) %>% list.rbind() %>%
-  mutate(`Patient ID` = as.numeric(`Patient ID`)) %>%
-  distinct() %>%
-  filter(!(`Patient ID` == "6019" & str_detect(Disease, "unknown"))) %>%
-  set_rownames(pull(., 1))
+data("clinic")
+blocks <- clinic
+# blocks <- lapply(
+#     seq(5),
+#     function(i) {
+#         read_excel(
+#             path = file.path(golem::get_golem_wd(), "inst", "extdata", "Updated List of patients- Batch1,2,3, 4 and 5 June 2023.xlsx"),
+#             skip = 1,
+#             sheet = i
+#         ) %>% select(contains(c("Patient", "Disease")))
+#     }
+# ) %>% list.rbind() %>%
+#   mutate(`Patient ID` = as.numeric(`Patient ID`)) %>%
+#   distinct() %>%
+#   filter(!(`Patient ID` == "6019" & str_detect(Disease, "unknown"))) %>%
+#   set_rownames(pull(., 1))
 
 batch_df <- read_tsv(file.path(cwd, "inst", "extdata", "batch_rna.tsv")) %>% filter(str_detect(Sample, "A"))
 batches <- pull(batch_df, 2) %>% set_names(pull(batch_df, 1) %>% str_remove_all("A05PB\\d") %>% as.numeric())
@@ -55,7 +57,7 @@ library(organism, character.only = TRUE)
 ```{r}
 # Load the count matrix
 path <- file.path(cwd, "inst", "extdata")
-counts_matrix <- read_tsv(file = file.path(path, "gene_counts.tsv"))
+counts_matrix <- read_tsv(file = file.path(path, "gene_counts_all_batch4.tsv"))
 ```
 
 # Extract visits and intersect common rows between data
@@ -154,7 +156,7 @@ use_data(gene_query, overwrite = TRUE)
 ```{r}
 blocks <- lapply(
     c("control", "osteitis"),
-    function(x) filter(blocks, str_detect(Disease, x)) %>% rownames()
+    function(x) filter(blocks, str_detect(C_2643_3798, x)) %>% rownames()
 ) %>% 
     list.map(f(i, k) ~ data.frame(id = i, group = factor(k - 1))) %>%
     list.rbind() %>%
@@ -597,8 +599,17 @@ c("TNF-alpha Signaling via NF-kB", "Complement Activation", "regulation of chemo
 (up_genes <- get_genes_path(enriched[[1]][[1]], up) %>% suppressMessages())
 (down_genes <- get_genes_path(enriched[[2]][[1]], down) %>% suppressMessages())
 
-top_genes0 <- c(up_genes, down_genes) %>% unlist() %>% sort() %>% unique() %>% list() %>% set_names(names(blocks))
+up_genes %>% unlist() %>% sort() %>% unique() %>% get_genes_path(enriched[[1]][[1]][c(seq(2), 4:6)],. , detect = "Genes", name = "Term")
 
+# list.map(vars, get_genes_path(c(enriched[[1]][[1]][c(seq(2), 4:6)], enriched[[2]][[1]][c(seq(2), 4:6)]),. , detect = "Genes", name = "Term"))
+
+# ctr %>% head(10) %>% rownames() %>% get_genes_path(c(enriched[[1]][[1]][c(seq(2), 4:6)], enriched[[2]][[1]][c(seq(2), 4:6)]), . , detect = "Genes", name = "Term")
+
+top_genes <- c(up_genes, down_genes) %>% unlist() %>% sort() %>% unique() %>% list() %>% set_names(names(blocks))
+```
+
+
+```{r, eval = FALSE}
 immu_genes <- c("WARS1", "BATF2", "FCGR1A", "LAP3", "GBP2", "C2")
 # immu_genes <- c("CCL4", "TNF", "CXCL2", "IL1B")
 # ADM, IRF1, PELI1, ABCA1
@@ -724,6 +735,10 @@ row_annotation <- data.frame(Group = disease)
 # row_annotation[2, ] <- "aIL1 only"
 res_scaled <- blocks <- t(blocks2[[i]])
 res_scaled_na <- scale0(blocks, "minmax")
+```
+
+
+```{r, eval = FALSE}
 
 disease <- ifelse(blocks1[[2]] == 0, names_levels[1], names_levels[2]) %>% set_colnames("Treatment")
 row_annotation <- data.frame(Treatment = disease)
