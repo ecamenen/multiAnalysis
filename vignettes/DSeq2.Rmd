@@ -1017,4 +1017,63 @@ plot_venn1(genes, label = FALSE, colour = get_colors()[c(1, 4, 6, 8, 2:3, 5)])
 get_intersection0(genes[-c(2:3)])
 
 as.tibble(enrich_kegg[[2]][[4]]) %>%  filter(str_detect(Description,  "Human T")) %>% pull(geneID) %>% str_split("/") %>% pluck(1) %>% bitr(fromType = "ENTREZID", toType = "ALIAS", OrgDb = get(organism)) %>% pull(2)
+
+pathview(gene.data = kegg_genes[[1]], species="hsa", pathway.id="hsa04060", low = list(gene = "#377EB8", cpd = "blue"), mid = list(gene = "gray", cpd = "gray"), high = list(gene = "#E41A1C", cpd =
+"yellow"))
 ```
+```{r}
+# gse_wiki <- gseWP(kegg_genes[[1]], organism = "Homo sapiens") %>%
+#   setReadable(OrgDb = get(organism), keyType = "ENTREZID")
+plot_enrich(gse_wiki , n = 25, wrap = 50, type = "gsea", title = "WikiPathway")
+
+# gsePathway(kegg_genes[[1]], 
+#                 pvalueCutoff = 0.05,
+#                 pAdjustMethod = "BH", 
+#                 verbose = FALSE)
+
+library(DOSE)
+gse_do <- gseDO(kegg_genes[[1]], verbose = FALSE)
+gse_dgn <- gseDGN(kegg_genes[[1]], verbose = FALSE)
+
+# library(AnnotationHub)
+# library(MeSHDbi)
+# ah <- AnnotationHub(localHub = TRUE)
+# hsa <- query(ah, c("MeSHDb", "Homo sapiens"))
+# file_hsa <- hsa[[1]]
+# db_mesh <- MeSHDbi::MeSHDb(file_hsa)
+db_mesh <- MeSHDbi::MeSHDb("C:\\Users\\etien\\AppData\\Local/R/cache/R/AnnotationHub/70c065c527f7_98354")
+library(meshes)
+gse_mesh <- gseMeSH(kegg_genes[[1]], MeSHDb = db, database = 'gene2pubmed', category = "G")
+```
+```{r}
+p$GO <- plot_enrich(gse_go_cro[[1]] , n = 25, wrap = 50, type = "gsea", title = "GO")
+p$KEGG <- plot_enrich(gsea_kegg[[1]] , n = 25, wrap = 50, type = "gsea", title = "KEGG")
+p$WIKI <- plot_enrich(gse_wiki , n = 25, wrap = 50, type = "gsea", title = "WikiPathway")
+# p$DO <- plot_enrich(gse_do , n = 25, wrap = 50, type = "gsea", title = "Disease Ontology")
+p$DGN <- plot_enrich(gse_dgn , n = 25, wrap = 50, type = "gsea", title = "Disease Gene Network")
+p$MESH <- plot_enrich(gse_mesh , n = 25, wrap = 50, type = "gsea", title = "MeSH")
+p$MSIG <- plot_enrich(gse_msig2 , n = 25, wrap = 50, type = "gsea", title = "MSigDb")
+
+plot_grid(
+    plotlist = p[-6],
+    nrow = 2,
+    ncol = 3,
+    align = "hv"
+)
+```
+
+```{r, eval = FALSE}
+library(msigdbr)
+db_msig <- msigdbr(species = "Homo sapiens")
+msig_gene <- select(db_msig, gs_name, entrez_gene)
+msig_description <- select(db_msig, gs_name, gs_description)
+gse_msig <- GSEA(kegg_genes[[1]], TERM2GENE = msig_gene, TERM2NAME = msig_description) %>%
+  setReadable(OrgDb = get(organism), keyType = "ENTREZID")
+
+db_msig2 <- msigdbr(species = "Homo sapiens", category = "C7")
+msig_gene2 <- select(db_msig2, gs_name, entrez_gene)
+msig_description2 <- select(db_msig2, gs_name, gs_description)
+gse_msig2 <- GSEA(kegg_genes[[1]], TERM2GENE = msig_gene2, TERM2NAME = msig_description2) %>%
+  setReadable(OrgDb = get(organism), keyType = "ENTREZID")
+```
+
