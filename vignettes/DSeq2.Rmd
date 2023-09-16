@@ -20,6 +20,7 @@ library(multiAnalysis)
 library(tximport)
 library(enrichplot)
 library("ggupset")
+library(sva)
 # library(ggVennDiagram)
 cwd <- golem::get_golem_wd()
 set_analysis(block_name = "clinic", type = "qual", cwd = cwd)
@@ -97,7 +98,8 @@ gene_name <- str_remove_all(counts_matrix$gene_id, "\\.*")
 common_rows <- Reduce(intersect, list(colnames(counts_matrix), rownames(blocks), names(batches)))
 counts_matrix <- lapply(l_visits, function(i) select(i, matches(paste0("^", common_rows, "$", collapse = "|")))) %>% list.cbind() %>% select(-contains("gene_id"))
 
-blocks <- data.frame(blocks)[common_rows, ] # %>% select(contains(c("Mucocutaneous", "Musculoskeletal", "Urticaria", "Myocarditis", "Anti.IL1", "Anti.IL6", "Corticosteroid", "DMARDs", "Kinase.Inhibitor", "Naive")))
+blocks <- blocks %>% mutate(ID = rownames(.)) %>% filter(ID %in% common_rows) %>% select(-ID) %>% select(contains(c("Mucocutaneous", "Musculoskeletal", "Urticaria", "Myocarditis", "Anti-IL1", "Anti-IL6", "Corticosteroid", "DMARDs", "Kinase.Inhibitor", "Naive")))
+
 
 # c(list.map(l_visits, f(i) ~ colnames(i)[-1]), CLINIC = list(rownames(blocks)))
 # plot_venn1(temp, color = c("#FED976", "#FD8D3C", "#377EB8"))
@@ -230,38 +232,6 @@ if ("Corticosteroid" %in% colnames(blocks)) {
 }
 ```
 
-# Extract gene files
-```{r, eval = FALSE}
-gene_counts <- list.map(
-    seq(3),
-    f(i) ~ {
-        list.map(
-            list.files(
-                path = file.path(path, "RNASeq", "gene_counts", paste0("Batch", i)),
-                full.names = TRUE,
-                pattern = "tsv"
-            ),
-            f(i) ~ {
-                read_tsv(i, col_names = FALSE) %>%
-                    select(X1, X2) %>%
-                    set_colnames(c("id", str_extract(i, "\\d{5}[AB]05PB1")))
-            }
-        ) %>% Reduce(function(x, y) full_join(x, y, by = "id"), .)
-    }
-) %>% Reduce(function(x, y) full_join(x, y, by = "id"), .)
-# use_data(gene_counts, overwrite = TRUE)
-```
-
-# Remove batch effect
-```{r, eval = FALSE}
-# library(sva)
-counts_combat <- as.matrix(counts_matrix) %>%
-    set_rownames(gene_name) %>%
-    ComBat_seq(batches) %>%
-    as.data.frame()
-counts_combat_HUGO <- ensembl_to_hugo(ensembl_hgnc, counts_combat)
-```
-
 # DGEA
 ```{r}
 # setA <- select(counts_matrix, which(groups == 0) %>% names())
@@ -286,6 +256,11 @@ l_de0 <- list.map(blocks, f(i, j) ~ {
 # results() %>%
 l_de <- list.map(l_de0, f(i) ~ lfcShrink(i, coef = "group_1_vs_0") %>%
     as.data.frame())
+# rownames_to_column(l_de[[1]], "geneName") %>% write_tsv(file.path(path, "dgea_ctr_still_batch5.tsv"))
+list.map(
+  l_de,
+  f(x, y, z) ~ rownames_to_column(x, "geneName") %>% write_tsv(file.path(path, paste0("dgea_still_batch4_", str_to_lower(z) %>% snakecase::to_any_case("none"), ".tsv")))
+)
 ```
 
 # Volcano plot
@@ -469,7 +444,7 @@ filtered <- names(top_genes[[1]]) %>% str_detect("Naive") %>% which()
 ```
 
 
-# Enrichment analysis
+# ORA
 ```{r}
 enriched <- list.map(
   c("Up-regulated", "Down-regulated"),
@@ -491,7 +466,7 @@ list.map(
   enriched, 
   f(a, b, c) ~ {
     list.map(
-      a,
+      compact(a),
       f(x, y, z) ~ {
     #   tiff(
     #     file.path(path_img, paste0("enrichr_", z, "_", c, ".tiff")),
@@ -561,6 +536,9 @@ list.map(
 
 ```{r, eval = FALSE} 
 list.map(enriched[[1]][[1]], f(j) ~ filter(j, Adjusted.P.value <= 0.05) %>% select(c(1, 4, 9))) %>>% list.filter(.i != 3) %>% keep(function(x) nrow(x) > 0)
+
+list.map(enriched[[1]][[1]], f(j) ~ filter(j, Adjusted.P.value <= 0.05) %>% pull(Term)) %>>% list.filter(.i != 3) %>% compact() %>% unlist() %>% unname() %>% as.data.frame() %>% write_tsv(file = file.path(cwd, "path.tsv"), col_names = FALSE)
+
 list.map(enriched, f(i) ~ list.map(i, f(j) ~ filter(j, Adjusted.P.value <= 0.05) %>%
     dplyr::select(c(1, 4, 9)) %>%
     head(15)) %>% keep(function(x) nrow(x) > 0)) %>% compact() -> tmp0
@@ -586,7 +564,7 @@ list.map(dbs, f(j) ~ list.filter(tmp0, f(i) ~ !is.null(i[[j]])) %>% list.names()
 # cnetplot0(ck0, cex = 1.5, n = 15)
 ```
 
-```{r}
+```{r, eval = FALSE}
 down <- c("cytokine receptor activity", "IL-2/STAT5 Signaling", "KRAS Signaling Up", "Inflammatory Response", "Interleukin-10 Signaling")
 c("TNF-alpha Signaling via NF-kB", "IL-6/JAK/STAT3 Signaling", "MHC class II protein binding", "negative regulation of toll-like receptor signaling pathway", "inflammatory response", 
   "regulation of T cell differentiation", "negative regulation of T cell differentiation", "regulation of T-helper 1 cell cytokine production",
@@ -624,7 +602,7 @@ top_genes0 <- list.map(l_de2, f(i) ~ get_top0(i, n = 50) %>%
     unique())
 ```
 
-```{r}
+```{r, eval = FALSE}
 enriched0 <- enriched[[1]][[1]][c(seq(2), 4:6)]
 enrich_genes0 <- c(
     get_genes_path(enriched0, "complement") %>% format_path() %>% .[seq(3)],
@@ -806,7 +784,7 @@ plot_grid(
     ncol = 2,
     align = "hv"
 )# %>%
-save_tiff(file.path(path_img, "gsea_treat2.tiff"), 8000, 4000)
+# save_tiff(file.path(path_img, "gsea_treat2.tiff"), 8000, 4000)
 
 # Cluster categories
 enrichplot::pairwise_termsim(gse[[1]]) %>% emapplot(showCategory = 10)
@@ -911,7 +889,7 @@ ck_kegg <- lapply(
     ) %>% 
   setReadable(OrgDb = get(organism), keyType = "ENTREZID")
 
-plot_enrich_gsea(ck)
+plot_enrich_gsea(ck_kegg)
 cnetplot0(ck_kegg)
 
 # Perform GSEA with KEGG
@@ -945,8 +923,9 @@ list.map(
     gsea_kegg,
     f(i, j, k) ~ {
         # setReadable(i, OrgDb = get(organism), keyType = "ENTREZID") %>%
-            heatplot0(foldChange = kegg_genes[[k]]) + 
-            labs(title = k) + theme(legend.position = "none")
+        heatplot0(i, foldChange = kegg_genes[[k]]) + 
+        labs(title = k) + 
+        theme(legend.position = "none")
     }
 )  %>% plot_grid(
     plotlist = .,
