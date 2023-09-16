@@ -955,7 +955,7 @@ list.map(
     align = "hv",
     rel_heights = c(1, 1.5)
 )
-get_kegg_path(gsea_kegg, "Human T")
+# get_kegg_path(gsea_kegg, "Human T")
 
 # Common genes between models
 get_enrich_genes(gsea_kegg) %>% plot_venn1(cex = 1.5, n = 20)
@@ -991,18 +991,30 @@ list.map(
     #     height = 4000,
     #     res = 300
     # )
-    plot_enrich(x, wrap = 25, n = 11, type = "kegg", title = "", paste0(z, " (", str_to_title(k), ")") %>% str_wrap(20))
+    plot_enrich(x, wrap = 35, n = 11, type = "kegg", title = "KEGG") + labs(x = "") # paste0(z, " (", str_to_title(k), ")") %>% str_wrap(20))
         })
     # dev.off()
-}) -> p
+}) -> p3
 
+# plot_grid(
+#     plotlist = c(p[[1]][-2], p[[2]]),
+#     nrow = 2,
+#     ncol = 3,
+#     align = "hv"
+# )
 plot_grid(
-    plotlist = c(p[[1]][-2], p[[2]]),
+    plotlist = p3[[1]],
     nrow = 2,
-    ncol = 3,
-    align = "hv"
+    ncol = 3
 )
+plot_grid(
+    plotlist = p3[[2]],
+    nrow = 2,
+    ncol = 3
+)
+```
 
+```{r, eval = FALSE}
 # Common pathways between models
 list.map(enrich_kegg, list.map(., f(j) ~ sort(j$Description))) -> pathways
 pathways0 <- c(pathways[[1]][-2], pathways[[2]]) %>% set_names(paste(c(rep("Up", 2), rep("Down", 4)), names(.)))
