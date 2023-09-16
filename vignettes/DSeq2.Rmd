@@ -1077,3 +1077,89 @@ gse_msig2 <- GSEA(kegg_genes[[1]], TERM2GENE = msig_gene2, TERM2NAME = msig_desc
   setReadable(OrgDb = get(organism), keyType = "ENTREZID")
 ```
 
+```{r}
+gse <- list(gse_go, gsea_kegg, gse_wiki, gse_do, gse_dgn, gse_mesh)
+# use_data(gse, overwrite = TRUE)
+titles <- c("GO", "KEGG", "WikiPathway", "Disease Ontology", "Disease Gene Network", "MeSH", "MSigDb")
+p3 <- lapply(
+  names(l_de),
+  function (x) {
+    print(x)
+    lapply(
+      seq(gse),
+      function(i) {
+        print(i)
+        if (!is.null(gse[[i]][[x]]) && nrow(gse[[i]][[x]]) > 0) {
+          plot_enrich(
+            gse[[i]][[x]], 
+            n = 15, 
+            wrap = 35,
+            type = "gsea",
+            title = titles[i]
+          ) + theme(axis.title.x = element_blank())
+        }
+      }
+    ) %>%
+        plot_grid(
+            plotlist = .,
+            nrow = 2,
+            ncol = 3,
+            align = "hv"
+      ) %>%
+        plot_grid(
+          ggdraw() + draw_label(
+            x,
+            color = "#2F5496",
+            size = 50,
+            fontface = "bold.italic"
+            ),
+          .,
+          ncol = 1,
+          rel_heights = c(0.1, 1)
+        )
+  }
+)
+
+plot_grid(
+    plotlist = p3[[1]],
+    nrow = 2,
+    ncol = 3,
+    align = "hv"
+)
+
+lapply(
+  seq(gse), 
+  function(x) {
+    if (length(gse[[x]]) > 1) {
+      lapply(
+        list.match(gse[[x]], "(Control)|(aIL1 Naive vs aIL1 Responder)"),
+        function(x) {
+          str_remove_all(
+            x$Description, "\\(.*") %>%
+            str_remove_all("((ORPHA)|(WP)|(HSA)|(R-)).*") %>%
+            to_title()
+        }
+      ) %>% plot_venn1(n = 35, label = FALSE) +
+          theme(legend.position = "none")  # %>%
+      # plot_grid(
+      #   ggdraw() + draw_label(
+      #     titles[x],
+      #     color = "#2F5496",
+      #     size = 15,
+      #     fontface = "bold.italic"
+      #     ),
+      #   .,
+      #   nrow = 2,
+      #   ncol = 1,
+      #   rel_heights = c(0.1, 1)
+      # )
+    }
+  }
+) %>%
+  plot_grid(
+    plotlist = .,
+    nrow = 2,
+    ncol = 3,
+    align = "hv"
+  )
+```
