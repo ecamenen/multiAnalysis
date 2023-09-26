@@ -632,9 +632,9 @@ c("TNF-alpha Signaling via NF-kB", "Complement Activation", "regulation of chemo
 (down_genes <- get_genes_path(enriched[[2]][[1]], down) %>% suppressMessages())
 
 up_genes %>% unlist() %>% sort() %>% unique() %>% get_genes_path(enriched[[1]][[1]][c(seq(2), 4:6)],. , detect = "Genes", name = "Term")
-list.search(cou, str_subset(., "Interferon"))
+# list.search(cou, str_subset(., "Interferon"))
 
-list.map(c("Complement", "Interferon"), f(x) ~list.search(cou, str_subset(., x)) %>% names())
+# list.map(c("Complement", "Interferon"), f(x) ~list.search(cou, str_subset(., x)) %>% names())
 
 # list.map(vars, get_genes_path(c(enriched[[1]][[1]][c(seq(2), 4:6)], enriched[[2]][[1]][c(seq(2), 4:6)]),. , detect = "Genes", name = "Term"))
 
@@ -1212,3 +1212,92 @@ lapply(
     align = "hv"
   )
 ```
+
+# Cytokines
+```{r}
+samples <- read_tsv(file.path(path, "cytosig.Zscore"), n_max = 1, col_names = FALSE)
+cyt <- read_tsv(file.path(path, "cytosig.Zscore"), skip = 1, col_names = FALSE) %>% set_colnames(c("geneName", str_remove_all(samples, "\\d{2}PB\\d") %>% str_replace_all("0?(.*)([AB])", "\\2.\\1")))
+
+cyt <- read_tsv(file.path(path, "deconvolution_batch5.tsv")) %>% rename(geneName = cell_type) %>% set_colnames(colnames(.) %>% str_remove_all("\\d{2}PB\\d") %>% str_replace_all("0?(.*)([AB])", "\\2.\\1"))
+cyt[cyt < 0] <- 0
+
+l_cyt <- list.map(blocks11, f(x) ~ rownames(x) %>% c("geneName", .) %>% select(cyt, .))
+
+# colour_var <- colorRampPalette(
+#   c(brewer.pal(9, "YlOrBr")[4:7],
+#     brewer.pal(9, "RdBu")[1:3],
+#     brewer.pal(11, "PiYG")[4:1],
+#     brewer.pal(11, "PRGn")[1:4],
+#     brewer.pal(11, "RdYlBu")[8:11],
+#     brewer.pal(11, "BrBG")[10:8],
+#     brewer.pal(11, "PiYG")[8:11]
+#     )
+#   )(nrow(cyt))
+colour_var <- c(
+    brewer.pal(9, "Set1")[c(1:3, 3:5, 8)],
+    rev(brewer.pal(7, "Set2")[c(6:5)]),
+    brewer.pal(8, "Pastel1")[-c(3, 6:7, 9)]
+)
+
+i = 1
+list.map(
+  c(0, 1),
+  f(j) ~ {
+    filter(blocks11[[i]], group == j) %>% 
+      rownames() %>% 
+      c("geneName", .) %>% 
+      select(l_cyt[[i]], .) %>% 
+      t() %>%
+      as.data.frame() %>% 
+      row_to_names(row_number = 1)
+    }
+  ) -> tmp
+vars <- c("IL1A", "IL1B", "IL4", "IL4", "IL12", "IL13", "IFN1", "IFNG", "IFNL")
+list.map(
+  # pull(cyt, "geneName"),
+  vars,
+  f(j, jj) ~ {
+    list.map(tmp, f(k) ~ select(k, j)) %>% 
+      list_cbind() %>% 
+      set_colnames(rep("", 2)) %>% 
+      as.data.frame() %>% 
+      update_columns(1:2, as.numeric) %>% 
+      plot_violin0(
+        method = "wilcox",
+        # colour = get_colors()[seq(length(unique(cl)))],
+        colour = c(colour_var[jj], alpha(colour_var[jj], 0.5)),
+        color_title = colour_var[jj],
+        wrap = 5,
+        size = 3,
+        pch_colour = "gray50",
+        wrap_title = 20,
+        pch_alpha = 0.5,
+        ylab = "",
+        title = j
+      ) + theme(
+        axis.title = element_blank()
+      )
+    }
+  ) %>% 
+ plot_grid(
+        plotlist = .,
+       align = "hv",
+        nrow = 3, # 6,
+        ncol = 3 # 8
+    )
+
+
+stats <- l_cyt[[i]] %>% 
+  t() %>%
+  as.data.frame() %>% 
+  row_to_names(row_number = 1) %>%
+  mutate(cl = pull(blocks11[[i]], group)) %>%
+  update_columns(seq(nrow(l_cyt[[i]])), as.numeric) %>%
+  calculate_test1(method = "wilcox")
+
+filter(stats, p <= 0.1) %>%
+  select(-c("W", "p", " ")) %>%
+  kable0()
+
+```
+
