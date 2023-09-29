@@ -372,14 +372,138 @@ filter(stats, p <= 0.05) %>% pull(Variables) %>% list.map(f(x, y, z) ~ select(bl
 
 filter(stats, p <= 0.05) %>% pull(Variables) %>% list.map(f(x) ~ select(blocks, x) %>% mutate(cl = cl) %>% group_by(cl) %>% group_split() %>% as.list() %>% list.map(f(i) ~ pull(i, x)) %>% list_cbind() %>% set_colnames(paste0("G", seq(3))) %>% get_melt() %>% dunn_test(value ~ name, p.adjust.method = "BH") %>% add_xy_position(x = "group"))
 
-data("t_general")
+fct_count(as.factor(cl))
+cl <- cl[cl != 2]
+cl0 <- data.frame(cl) %>% rownames_to_column("immun_aid_identifier") %>% mutate(cl = as.character(cl), immun_aid_identifier = as.double(immun_aid_identifier))
 
-t_general0 <- t_general %>% mutate(immun_aid_identifier = rownames(.) %>% as.double()) %>% left_join(select(clinic_intersect, age_at_inclusion_time, immun_aid_identifier)) %>% rename(`Age at inclusion time` = age_at_inclusion_time)
-blocks0 <- blocks %>% mutate(immun_aid_identifier = rownames(.) %>% as.double()) %>% left_join(t_general0) %>% select(c(colnames(t_general0), -c(immun_aid_identifier, `In how many months?`, `Weight loss (kg)`)))
-as.data.frame(blocks0) %>%
-    cbind(cl = as.character(cl)) %>%
-    calculate_test1(method = "kruskal") %>% 
-    arrange(p)
+blocks00 <- as.data.frame(clinic_transf) # %>% mutate(immun_aid_identifier = rownames(.) %>% as.double())
+
+data("t_biol")
+data("t_general")
+data("t_aidai")
+data("t_treat_types")
+data("t_treat_subtypes")
+t_biol0 <- t_biol %>% select(starts_with("V1")) %>% set_colnames(colnames(.) %>% str_remove("V1.")) %>% mutate(immun_aid_identifier = rownames(.) %>% as.double()) %>% select(-c(`Serum peak`, Schizocytes, SAA))
+t_general0 <- t_general %>% mutate(immun_aid_identifier = rownames(.) %>% as.double()) %>% select(-c("Fever", "Frequency if flares/attacks"))  %>% left_join(select(clinic_transf, age_at_inclusion_time, BMI, immun_aid_identifier)) %>% rename(`Age at inclusion time` = age_at_inclusion_time) # %>% select(-c(`In how many months?`, `Weight loss (kg)`))
+t_aidai0 <- t_aidai %>% mutate(`Total score` = rowSums(., na.rm = TRUE)) %>% mutate(immun_aid_identifier = rownames(.) %>% as.double()) %>% select(-c(`Eye manifestations`, `Neurological manifestations`, `Vascular involvement`))
+# t_manif0 <- t_manifs %>% mutate(immun_aid_identifier = rownames(.) %>% as.double()) 
+# t_treat <- left_join(
+#   as.data.frame(t_treat_types) %>% mutate(immun_aid_identifier = rownames(.) %>% as.double()),
+#   as.data.frame(t_treat_subtypes) %>% mutate(immun_aid_identifier = rownames(.) %>% as.double()) %>% rename(`Other biological` = Other)
+# ) %>% update_columns(str_which(colnames(t_treat), "identifier", TRUE), function(x) as.character(x))
+# t_muscu0 <- t_muscu %>% mutate(immun_aid_identifier = rownames(.) %>% as.double()) %>% update_columns(str_which(colnames(t_treat), "identifier", TRUE), function(x) as.character(x))
+# %>% select(colnames(t_treat_types)[1])
+blocks0 <-  left_join(blocks00, t_biol0) %>% select(colnames(t_biol0))
+
+vars <- c("Neutrophils %", "CRP",  "Leucocytes", "Fatigue", "Dermatological manifestations", "Chest pain")
+t_all <- list(t_biol0, t_general0, t_aidai0) %>% Reduce(function(x, y) left_join(x, y), .) %>% select( c(vars, "immun_aid_identifier"))
+
+blocks0 <- as.data.frame(blocks0) %>%
+    right_join(cl0) %>% 
+    column_to_rownames("immun_aid_identifier")
+
+stats <- calculate_test1(blocks0, method = "wilcox", stats = TRUE) %>% 
+  arrange(p) %>%
+  filter(p <= 0.2)
+
+pivot_longer(x, !cl) %>%
+    group_by(name, cl) %>%
+    summarize(stat = print_stats0(value)) %>%
+    ungroup() %>%
+    spread(cl, stat) %>%
+    set_colnames(c("Variables", unique(cl) %>% length() %>% seq() %>% paste0("G", .))) %>%
+    left_join(stats)
+
+select(stats, -c("W", "FDR")) %>%
+  kable0()
+
+# colour_var <- get_colors()[-c(6:7)]
+colour_var <- colorRampPalette(
+  c(brewer.pal(9, "YlOrBr")[4:7],
+    brewer.pal(9, "RdBu")[1:3],
+    brewer.pal(11, "PiYG")[4:1],
+    brewer.pal(11, "PRGn")[1:4],
+    brewer.pal(11, "RdYlBu")[8:11],
+    brewer.pal(11, "BrBG")[10:8],
+    brewer.pal(11, "PiYG")[8:11]
+    )
+  )(nrow(stats))
+
+list.map(
+    colnames(select(blocks0, -cl)) %>% discard(function(x) str_detect(x, "ULN")),
+    # pull(stats, Variables),
+    # vars,
+    f(x, y) ~ {
+        select(blocks0, c(x, cl)) %>% 
+            group_by(cl) %>% 
+            group_split() %>% 
+            as.list() %>% 
+            list.map(f(i) ~ pull(i, x)) %>% 
+            list_cbind() %>% 
+            set_colnames(paste0("G", seq(length(unique(cl)))))  %>% 
+            plot_violin0(
+                method = "wilcox",
+                # colour = get_colors()[seq(length(unique(cl)))],
+                # colour = c(colour_var[y], alpha(colour_var[y], 0.5)),
+                colour = brewer.pal(12, "Paired")[4:3],
+                color_title = "black",
+                wrap = 10,
+                wrap_title = 18,
+                size = 3,
+                pch_colour = "gray50",
+                pch_alpha = 0.5,
+                ylab = "",
+                title = x
+            ) + theme(axis.title.y = element_blank())
+    }
+) %>%
+    plot_grid(
+        plotlist = .,
+        # align = "hv",
+        nrow = 4,
+        ncol = 8
+    )
+
+
+
+vars <- c("batch", "gender", "patient_ethnicity") #, "age_at_inclusion_time")
+blocks0 <- left_join(blocks00, select(clinic_transf, c(vars, immun_aid_identifier))) %>% 
+  select(-c(colnames(blocks))) %>% 
+  mutate(
+    batch = as.factor(batch),
+    # age_at_inclusion_time = ifelse(age_at_inclusion_time >= 18, "Adult", "Children")
+  )
+blocks0 <- as.data.frame(blocks0) %>%
+    right_join(cl0) %>% 
+    column_to_rownames("immun_aid_identifier")
+blocks0 <- blocks0 %>%
+  # filter(!is.na(batch)) %>% 
+  na.omit() %>%
+  remove_constant() %>%
+  # select(update_columns(., seq(ncol(.)), function(x) as.numeric(x)) %>% colSums() %>% `>`(1) %>% which()) %>%
+  rename(Cluster = cl)
+stats <- chi2_test(pull(blocks0, Cluster), select(blocks0, -Cluster), method = "fisher")
+
+list.map(
+  select(blocks0, -Cluster) %>% colnames(),
+  f(i) ~ {
+    select(blocks0, c(i, Cluster)) %>%
+      chi_plot(method = "fisher", colour1 = c(get_colors()[c(1, 3)], brewer.pal(9, "Pastel1")[c(1, 3)]), title = i, wrap = 15) +
+      theme(
+        legend.position = "none",
+        axis.title = element_blank(),
+        axis.text.x = element_blank()
+      ) 
+  }
+) %>%
+    plot_grid(
+        plotlist = .,
+        align = "hv",
+        nrow = 3,
+        ncol = 3
+    )
+
+
 
 confonding <- list.map(
   select(blocks0, -c("Max (°C)", "Number of consecutive days")),
@@ -397,13 +521,7 @@ f(x, y) ~ plot_cor2(data_frame(pull(blocks, x), pull(blocks0, "Age at inclusion 
         ncol = 3
     )
 
-list.map(colnames(select(blocks0, -c("Max (°C)", "Number of consecutive days"))), f(x) ~ select(blocks0, x) %>% mutate(cl = cl) %>% group_by(cl) %>% group_split() %>% as.list() %>% list.map(f(i) ~ pull(i, x)) %>% list_cbind() %>% set_colnames(paste0("G", seq(length(unique(cl))))) %>% plot_violin0(method = "kruskal", colour = get_colors()[seq(length(unique(cl)))], size = 3, pch_colour = "black", pch_alpha = 0.5, ylab = x, title = "")) %>%
-    plot_grid(
-        plotlist = .,
-        align = "hv",
-        nrow = 2,
-        ncol = 2
-    )
+
 
 plot_mean_test(dat, "physician_global_assessment", as_tibble(stats), colors_k)
 
@@ -443,16 +561,23 @@ arrange(tot, desc(ctr)) %>%
     # slice(seq(n)) %>%
     select(-c(starts_with("n_"), contains("sd_"), "p", "p.signif"))
 
-vars <- c("batch", "gender", "patient_ethnicity", "age_at_inclusion_time")
-t_conf <- blocks %>% 
-  mutate(immun_aid_identifier = rownames(.) %>% as.double()) %>% 
-  left_join(select(clinic_intersect, c(vars, immun_aid_identifier))) %>% 
-  select(-c(immun_aid_identifier, colnames(blocks))) %>% 
-  mutate(
-    batch = as.factor(batch),
-    age_at_inclusion_time = ifelse(age_at_inclusion_time >= 18, "Adult", "Children")
-  )
-  chi2_test(cl, t_conf, method = "fisher")
+
+  
+  
+list.map(
+ vars, 
+  f(x, xtt, xt) ~ {
+    pull(x, Variables) %>% list.map(
+      f(y) ~ {
+select(blocks, y) %>% mutate(cl = pull(t_conf, xt)) %>% group_by(cl) %>% group_split() %>% as.list() %>% list.map(f(i) ~ pull(i, 1)) %>% list_cbind() %>% set_colnames(pull(t_conf, xt) %>% levels()) %>% plot_violin0(method = "wilcox", colour = sapply(c(25, 75), function(j) col2hcl(get_colors()[xtt], l = j)), size = 3, pch_colour = "black", ylab = y, pch_alpha = 0.5, title = "", wrap = 10)
+})
+}) -> p
+plot_grid(
+    plotlist = c(p[[1]], list(NULL), p[[2]]),
+    align = "hv",
+    nrow = 2,
+    ncol = 4
+)
 
 confonding1 <- list.map(
   select(t_conf, -1),
