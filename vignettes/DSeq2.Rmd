@@ -60,7 +60,7 @@ library(organism, character.only = TRUE)
 # Load gene count data
 ```{r}
 # Load the count matrix
-# path <- file.path(cwd, "inst", "extdata")
+path <- file.path(cwd, "inst", "extdata")
 # counts_matrix <- read_tsv(file = file.path(path, "gene_counts.tsv"))
 # ids <- colnames(counts_matrix)[-1] %>% str_remove_all("[AB]05PB\\d") %>% as.numeric()
 # batch_df0 <- batch_df %>% pull(2) %>% set_names(pull(batch_df, 1))
@@ -175,7 +175,7 @@ use_data(gene_query, overwrite = TRUE)
 blocks <- lapply(
     # c("control", "(AOSD)|(SOJIA)"),
     c("control", "osteitis"),
-    function(x) filter(blocks, str_detect(C_2643_3798, x)) %>% pull(C_2643_3796) %>% as.numeric
+    function(x) filter(blocks, str_detect(C_2643_3798, x)) %>% pull("C_2643_3796") %>% as.numeric() %>% unique()
 ) %>% 
     list.map(f(i, k) ~ data.frame(id = i, group = factor(k - 1))) %>%
     list.rbind() %>%
@@ -657,7 +657,7 @@ up_genes %>% unlist() %>% sort() %>% unique() %>% get_genes_path(enriched[[1]][[
 
 # ctr %>% head(10) %>% rownames() %>% get_genes_path(c(enriched[[1]][[1]][c(seq(2), 4:6)], enriched[[2]][[1]][c(seq(2), 4:6)]), . , detect = "Genes", name = "Term")
 
-top_genes <- c(up_genes, down_genes) %>% unlist() %>% sort() %>% unique() %>% list() %>% set_names(names(blocks))
+top_genes1 <- c(up_genes, down_genes) %>% unlist() %>% sort() %>% unique() %>% list() %>% set_names(names(blocks))
 ```
 
 
@@ -1176,15 +1176,16 @@ lapply(
 
 # Cytokines
 ```{r}
-path <- file.path(cwd, "inst", "extdata")
-
 samples <- read_tsv(file.path(path, "cytosig.Zscore"), n_max = 1, col_names = FALSE)
 cyt <- read_tsv(file.path(path, "cytosig.Zscore"), skip = 1, col_names = FALSE) %>% set_colnames(c("geneName", str_remove_all(samples, "\\d{2}PB\\d") %>% str_replace_all("0?(.*)([AB])", "\\2.\\1")))
 
 # cyt <- read_tsv(file.path(path, "deconvolution_batch5.tsv")) %>% rename(geneName = cell_type) %>% set_colnames(colnames(.) %>% str_remove_all("\\d{2}PB\\d") %>% str_replace_all("0?(.*)([AB])", "\\2.\\1"))
 # cyt[cyt < 0] <- 0
 
-l_cyt <- list.map(blocks11, f(x) ~ rownames(x) %>% c("geneName", .) %>% select(cyt, .))
+l_cyt <- list.map(blocks, f(x) ~ { rownames(x) %>% c("geneName", .) ->tmp ; select(cyt, contains(tmp))})
+
+cyt <- read_csv(file.path(path, "scores_still.csv")) %>% t() %>% as.data.frame() %>% row_to_names(row_number = 1) %>% set_colnames(colnames(.) %>% as.numeric()) %>% mutate(geneName = rownames(.) %>% str_replace_all("_", " "))
+l_cyt <- list.map(blocks11, f(x) ~ {rownames(x) %>% str_remove("A.") %>% c("geneName", .) -> tmp; select(cyt, contains(tmp))}) 
 
 # colour_var <- colorRampPalette(
 #   c(brewer.pal(9, "YlOrBr")[4:7],
@@ -1205,17 +1206,18 @@ l_cyt <- list.map(blocks11, f(x) ~ rownames(x) %>% c("geneName", .) %>% select(c
 i = 1
 list.map(
   c(0, 1),
-  # c(1, 3),
+  # unique(cl0$cl),
   f(j) ~ {
     filter(blocks11[[i]], group == j) %>%
     # filter(cl0, cl == j) %>%
       rownames() %>%
       # pull("immun_aid_identifier") %>%
+      # list.map(f(y) ~ filter(l_cyt0[[i]], as.numeric(Patient) == y)) %>% list_rbind()
       # paste0("A.", .) %>%
-      c("geneName", .) %>% 
-      select(l_cyt[[i]], .) %>% 
+      c("geneName", .) -> tmp
+      select(l_cyt[[i]], contains(tmp)) %>%
       t() %>%
-      as.data.frame() %>% 
+      as.data.frame() %>%
       row_to_names(row_number = 1)
     }
   ) -> tmp
@@ -1257,19 +1259,21 @@ list.map(
     )
 
 
-stats <- l_cyt[[i]] %>% 
-  t() %>%
-  as.data.frame() %>% 
-  row_to_names(row_number = 1) %>%
-  # rownames_to_column("immun_aid_identifier") %>%
-  # right_join(mutate(cl0, immun_aid_identifier = paste0("A.", immun_aid_identifier))) %>%
-  # column_to_rownames("immun_aid_identifier") %>%
+t_cyt <- l_cyt[[i]] %>% 
+    t() %>%
+    as.data.frame() %>% 
+    row_to_names(row_number = 1) 
+
+stats <- t_cyt %>%
+  rownames_to_column("immun_aid_identifier") %>%
+  right_join(mutate(cl0, immun_aid_identifier = paste0("A.", immun_aid_identifier))) %>%
+  column_to_rownames("immun_aid_identifier") %>%
   mutate(cl = pull(blocks11[[i]], group)) %>%
   update_columns(seq(nrow(l_cyt[[i]])), as.numeric) %>%
-  calculate_test1(method = "wilcox")
+  calculate_test1(method = "wilcox", stats = TRUE)
 
 filter(stats, p <= 0.1) %>%
-  select(-c("W", "p", " ")) %>%
+  select(-c("W", "FDR", "  ")) %>%
   kable0()
 
 ```

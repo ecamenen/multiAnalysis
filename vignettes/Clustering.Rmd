@@ -468,7 +468,7 @@ list.map(
 
 vars <- c("batch", "gender", "patient_ethnicity") #, "age_at_inclusion_time")
 blocks0 <- left_join(blocks00, select(clinic_transf, c(vars, immun_aid_identifier))) %>% 
-  select(-c(colnames(blocks))) %>% 
+  select(c(vars, "immun_aid_identifier")) %>% 
   mutate(
     batch = as.factor(batch),
     # age_at_inclusion_time = ifelse(age_at_inclusion_time >= 18, "Adult", "Children")
@@ -479,6 +479,7 @@ blocks0 <- as.data.frame(blocks0) %>%
 blocks0 <- blocks0 %>%
   # filter(!is.na(batch)) %>% 
   na.omit() %>%
+  # update_columns(seq(ncol(.)), function(x) ifelse(is.na(x), 0, x)) %>%
   remove_constant() %>%
   # select(update_columns(., seq(ncol(.)), function(x) as.numeric(x)) %>% colSums() %>% `>`(1) %>% which()) %>%
   rename(Cluster = cl)
