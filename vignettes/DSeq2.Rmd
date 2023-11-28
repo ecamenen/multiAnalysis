@@ -14,6 +14,166 @@ knitr::opts_chunk$set(
 )
 ```
 
+```{r, eval = FALSE}
+library("readxl")
+blocks0 <- lapply(
+    seq(2),
+    function(x) {
+      read_excel(
+        file.path(path, "Still treatments V1 and V2 24NOV2023.xlsx"),
+        skip = 1,
+        sheet = x
+        ) %>% set_colnames(
+          colnames(.) %>%
+            str_remove_all("([Pp]atients)|(under)") %>% 
+            str_trim() %>%
+            str_replace_all("Nsaids", "NSAIDs") %>%
+            str_replace_all("a(nti)", "A\\1-") %>%
+            str_replace_all("GCs", "Corticosteroid")
+          )
+          }
+        )
+
+emna_treat <- lapply(
+    seq(2),
+    function(x) {
+      apply(blocks0[[x]][, -1], 2, function(x) is.na(x) %>% `!` %>% as.numeric())  %>%
+      as.data.frame() %>% 
+      mutate(
+        Other = (`Other...10` == 1 | `Other...11` == 1) %>% as.numeric(),
+        ID = blocks0[[x]]$`Patient ID`) %>% 
+      relocate(ID, 1) %>%
+      select(-matches("(Other...)|(global)")) %>%
+      # select(-c("Colchicine", "Anti-TNF")) %>%
+      column_to_rownames("ID")
+    }
+) %>% set_names(paste0("V", seq(2)))
+use_data(emna_treat, overwrite = TRUE)
+
+# blocks0[[1]]$`Other...10`[1] <- "Singulair complete response"
+tmp <- lapply(
+  seq(2),
+  function(i) {
+    tmp0 <- blocks0[[i]]$Other...11 %>% unique() %>% na.omit()
+blocks0[[i]]$Other...10[nrow(blocks0[[i]]):(nrow(blocks0[[i]]) - length(tmp0) + 1)] <- tmp0
+  lapply(
+  blocks0[[i]][, -seq(3)] %>% 
+  mutate(Other = `Other...10`) %>% 
+    select(-matches(c("TNF", "Other..."))),
+  function(x) {
+    sapply(
+      x,
+      function (y) {
+    tmp <- str_split(y, " ") %>% 
+          pluck(1) %>% 
+          str_remove_all(":") %>%
+          str_replace_all("Pracetamol", "Paracetamol")
+    if (is.na(tmp[[1]])) {
+      c(NA, NA)
+    } else {
+      c(tmp[[1]], paste(tmp[2:length(tmp)], collapse = " "))
+    }
+      }
+    ) %>% set_names(blocks0[[i]]$`Patient ID`)
+    }
+  )
+  }
+)
+
+# i <- 1
+names(tmp[[i]]) %>%  
+  lapply(function(x) tmp[[i]][[x]][1, ] %>% fct_count() %>% arrange(desc(n))) %>%
+  set_names(names(tmp[[i]]))
+
+names(tmp[[i]]) %>% 
+  discard(function(x) str_detect(x, "IL6")) %>%
+  list.map(f(x) ~ {
+    tmp0 <- tmp[[i]][[x]][1, ]
+    tmp0[tmp0 == "Response"] <- NA
+    plot_pie(tmp0, title = x)
+  }) %>%
+plot_grid(
+    plotlist = .,
+    nrow = 2,
+    ncol = 3,
+    align = "hv"
+)
+
+
+list.map(
+  seq(2),
+  f(i, j) ~ {
+per_drug_types <- names(tmp[[i]]) %>% 
+  discard(function(x) str_detect(x, "Patient")) %>%
+    lapply(function(x) tmp[[i]][[x]][1, ])
+tmp1 <- unlist(per_drug_types) %>%
+  na.omit()
+n <- fct_infreq(tmp1) %>%
+            fct_rev() %>%
+  fct_count() %>% 
+  filter(n > 1) %>% 
+  arrange(n) %>%
+  pull(f)
+cols <- list.mapv(
+  n,
+  f(x) ~ {
+    list.which(
+    per_drug_types, f(y) ~ {
+    if(all(is.na(y))){
+      FALSE
+    }  else {
+      str_detect(x, y) %>% any()
+      }
+    })
+  }
+)
+plot_bar_mcat(
+  tmp1, 
+  n_max = length(n), 
+  colour = GimmeMyPlot:::palette_discrete()[cols],
+  title = paste0("V", j)
+  )
+}) %>%
+plot_grid(
+    plotlist = .,
+    nrow = 2,
+    align = "hv",
+    rel_heights = c(2, 1)
+)
+
+cols <- c(1, 1, "#E41A1C", "#BAE4B3", "#238B45", "#74C476", "#984EA3", "#FF7F00",  "#F781BF")
+
+list.map(
+  seq(2),
+  f(i, j) ~{
+tmp1 <- emna_treat[[i]] %>%
+  apply(2, sum)
+cols0 <- data.frame(cols, tmp1) %>% filter(tmp1 > 0) %>% arrange(desc(tmp1))
+plot_bar(
+  select(cols0, tmp1), 
+  sample_size = nrow(emna_treat[[i]]), 
+  threshold = 1, 
+  colour = pull(cols0, cols),
+  title = paste0("V", j)
+  )
+}) %>%
+  plot_grid(
+    plotlist = .,
+    nrow = 2,
+    align = "hv"
+)
+
+emna_treat[[i]] %>%
+  select(-c("Colchicine", "Anti-TNF")) %>% 
+  apply(2, function(x) ifelse(x == 0, "No", "Yes")) %>%
+  plot_alluvial()
+
+# blocks1[[1]][c(naive, GCC_V1, aIL1_V1), ] %>%
+#   select(c("Corticosteroid", "Naive", "Anti-IL1")) %>% 
+#   apply(2, function(x) ifelse(x == 0, "No", "Yes")) %>%
+#   plot_alluvial()
+```
+
 # Setup
 ```{r setup}
 library(multiAnalysis)
@@ -23,10 +183,10 @@ library("ggupset")
 library(sva)
 # library(ggVennDiagram)
 # cwd <- golem::get_golem_wd()
-set_analysis(block_name = "emna_treat", type = "qual", cwd = cwd)
+path <- file.path(cwd, "inst", "extdata")
+set_analysis(block_name = "emna_treat", type = "list", cwd = cwd)
 
 data("clinic")
-data("treat_v2")
 control <- filter(clinic, str_detect(C_2643_3798, "control")) %>% pull(C_2643_3796) %>% as.numeric()
 # blocks <- clinic
 # blocks <- lapply(
