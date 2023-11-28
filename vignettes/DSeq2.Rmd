@@ -188,41 +188,22 @@ set_analysis(block_name = "emna_treat", type = "list", cwd = cwd)
 
 data("clinic")
 control <- filter(clinic, str_detect(C_2643_3798, "control")) %>% pull(C_2643_3796) %>% as.numeric()
-# blocks <- clinic
-# blocks <- lapply(
-#     seq(5),
-#     function(i) {
-#         read_excel(
-#             path = file.path(golem::get_golem_wd(), "inst", "extdata", "Updated List of patients- Batch1,2,3, 4 and 5 June 2023.xlsx"),
-#             skip = 1,
-#             sheet = i
-#         ) %>% select(contains(c("Patient", "Disease")))
-#     }
-# ) %>% list.rbind() %>%
-#   mutate(`Patient ID` = as.numeric(`Patient ID`)) %>%
-#   distinct() %>%
-#   filter(!(`Patient ID` == "6019" & str_detect(Disease, "unknown"))) %>%
-#   set_rownames(pull(., 1))
 
-batch_df <- read_tsv(file.path(cwd, "inst", "extdata", "batch_rna.tsv")) 
+batch_df <- read_tsv(file.path(path, "batch_rna.tsv")) 
 batches <-  filter(batch_df, str_detect(Sample, "A"))
 batches <- pull(batches, 2) %>% set_names(pull(batches, 1) %>% str_remove_all("A05PB\\d") %>% as.numeric())
-batches["6052"] <- 4
 
 setEnrichrSite("Enrichr")
-# listEnrichrDbs()$libraryName[listEnrichrDbs()$libraryName %>% grepl("orphanet", ., ignore.case = TRUE)]
 dbs <- c("GO_Molecular_Function_2021", "GO_Biological_Process_2021", "Orphanet_Augmented_2021", "WikiPathway_2021_Human", "MSigDB_Hallmark_2020", "Reactome_2022")
 organism <- "org.Hs.eg.db"
 library(organism, character.only = TRUE)
-# keytypes(get(organism))
 ```
 
 # Load gene count data
 ```{r}
 # Load the count matrix
-path <- file.path(cwd, "inst", "extdata")
-# counts_matrix <- read_tsv(file = file.path(path, "gene_counts.tsv"))
-# ids <- colnames(counts_matrix)[-1] %>% str_remove_all("[AB]05PB\\d") %>% as.numeric()
+counts_matrix <- read_tsv(file = file.path(path, "gene_counts.tsv"))
+ids <- colnames(counts_matrix)[-1] %>% str_remove_all("[AB]05PB\\d") %>% as.numeric()
 # batch_df0 <- batch_df %>% pull(2) %>% set_names(pull(batch_df, 1))
 # batch_df0 <- batch_df0[colnames(counts_matrix)[-1]]
 # counts_matrix0 <- as.matrix(counts_matrix[, -1]) %>%
@@ -270,12 +251,12 @@ l_visits <- list.map(
 counts_matrix <- l_visits[["A"]]
 gene_name <- str_remove_all(counts_matrix$gene_id, "\\.*")
 # Filter by common rows
-common_rows <- Reduce(intersect, list(colnames(counts_matrix), c(rownames(blocks), control, rownames(treat_v2)), names(batches)))
+common_rows <- Reduce(intersect, list(colnames(counts_matrix), c(sapply(blocks, rownames) %>% unlist(), control), names(batches)))
 counts_matrix <- lapply(l_visits, function(i) select(i, matches(paste0("^", common_rows, "$", collapse = "|")))) %>% list.cbind() %>% select(-contains("gene_id"))
 
-blocks <- blocks %>% mutate(ID = rownames(.)) %>% filter(ID %in% common_rows) %>% select(-ID) %>% select(contains(c("Mucocutaneous", "Musculoskeletal", "Urticaria", "Myocarditis", "Anti-IL1", "Anti-IL6", "Corticosteroid", "DMARDs", "Kinase.Inhibitor", "Naive")))
+blocks <- list.map(blocks, f(i) ~ i %>% mutate(ID = rownames(.)) %>% filter(ID %in% common_rows) %>% select(-ID)) # %>% select(contains(c("Mucocutaneous", "Musculoskeletal", "Urticaria", "Myocarditis", "Anti-IL1", "Anti-IL6", "Corticosteroid", "DMARDs", "Kinase.Inhibitor", "Naive")))
 
-treat_v2 <- treat_v2 %>% mutate(ID = rownames(.)) %>% filter(ID %in% common_rows) %>% select(-ID) 
+# treat_v2 <- treat_v2 %>% mutate(ID = rownames(.)) %>% filter(ID %in% common_rows) %>% select(-ID) 
 
 # c(list.map(l_visits, f(i) ~ colnames(i)[-1]), CLINIC = list(rownames(blocks)))
 # plot_venn1(temp, color = c("#FED976", "#FD8D3C", "#377EB8"))
@@ -348,15 +329,17 @@ blocks <- lapply(
 ```
 
 ```{r}
-GCC_V2 <- filter(treat_v2, Corticosteroid == 1 & `Anti-IL1` != 1 & Methotrexate != 1) %>% rownames()
-# batches[names(batches) %in% gccs]
-aIL1_V2 <- filter(treat_v2, `Anti-IL1` == 1 & Corticosteroid != 1 & Methotrexate != 1) %>% rownames()
-naive <- filter(blocks, Naive == 1) %>%
+blocks1 <- blocks
+GCC_V2 <- filter(blocks[[2]], Corticosteroid == 1 & `Anti-IL1` != 1 & `Anti-IL6` != 1 & `NSAIDs` != 1 & `DMARDs` != 1 & `Other` != 1  & `Anti-TNF` != 1) %>%
+    rownames()
+aIL1_V2 <- filter(blocks[[2]], Corticosteroid != 1 & `Anti-IL1` == 1 & `Anti-IL6` != 1) %>%
+    rownames()
+naive <- filter(blocks[[1]], Naive == 1) %>%
     rownames() %>%
     as.numeric()
-GCC_V1 <- filter(blocks, Corticosteroid == 1 & `Anti-IL1` != 1 & `Anti-IL6` != 1) %>%
+GCC_V1 <- filter(blocks[[1]], Corticosteroid == 1 & `Anti-IL1` != 1 & `Anti-IL6` != 1 & `NSAIDs` != 1 & `DMARDs` != 1 & `Other` != 1 & `Anti-TNF` != 1) %>%
     rownames()
-aIL1_V1 <- filter(blocks, Corticosteroid != 1 & `Anti-IL1` == 1 & `Anti-IL6` != 1) %>%
+aIL1_V1 <- filter(blocks[[1]], Corticosteroid != 1 & `Anti-IL1` == 1 & `Anti-IL6` != 1 & `NSAIDs` != 1 & `DMARDs` != 1 & `Other` != 1 & `Anti-TNF` != 1) %>%
     rownames()
 
 batches <- batches[common_rows]
@@ -375,38 +358,33 @@ blocks[2:3] <- list.map(
   list.map(
     c("A", "B"),
     f(i, j) ~ {
-    data.frame(id = get(paste0(x, "_V", j)), group = factor(j - 1)) %>% mutate(batch = batches[names(batches) %in% id] %>% factor()) %>% column_to_rownames(var = "id")
+    data.frame(id = get(paste0(x, "_V", j)), group = factor(j - 1)) %>% 
+        mutate(batch = batches[names(batches) %in% id] %>% factor()) %>% 
+        column_to_rownames(var = "id")
   }) %>% list.rbind()
 })
 
-# %>% set_names(paste0(c("GCC", "aIL1")," V1 vs V2"))
-
-blocks[4:5] <- list.map(list(GCC_V2, aIL1_V2), f(i, j, k) ~ data.frame(id = rep(i, 2), group = rep(c(0, 1), each = 3) %>% factor()) %>% mutate(batch = rep(batches[names(batches) %in% id], 2) %>% factor(), id = paste0(rep(c("A", "B"), each = 3), ".", id)) %>% column_to_rownames(var = "id"))
+blocks[4:5] <- list.map(
+  list(GCC_V2, aIL1_V2), 
+  f(i, j, k) ~ {
+    data.frame(id = rep(i, 2), group = rep(c(0, 1), each = length(i)) %>% factor()) %>% 
+      mutate(
+        batch = rep(batches[names(batches) %in% id], 2) %>% factor(), 
+        id = paste0(rep(c("A", "B"), each = length(i)), ".", id)
+        ) %>% 
+      column_to_rownames(var = "id")
+    })
 
 blocks[[5]]$batch <- rep(1, 6) %>% factor()
 
-blocks <- set_names(blocks, "Control vs Naive", c("GCs", "aIL1") %>% paste(., "Non-responder vs", ., "Responder"), c("GCs", "aIL1") %>% paste(., "Naive vs", ., "Responder"))
-
-# list.map(list(GCC_v2, aIL1_v2), f(x) ~ list.map(l_visits, f(i, j) ~ select(i, as.character(x)) #%>% set_colnames(paste0(LETTERS[j], colnames(.)))
-#                                                ) %>%
-#     list.cbind() %>%
-#     set_rownames(gene_name))
-```
-
-# Reshape data for treatments
-```{r, eval = FALSE}
-blocks0 <- blocks
-if ("Corticosteroid" %in% colnames(blocks)) {
-    selected_comb <- c("Naive vs GCs only", "Naive vs aIL1 only", "aIL1 only vs GCs + aIL1", "Naive vs GCs + aIL1", "GCs only vs GCs + aIL1")
-    blocks <- blocks %>%
-        mutate(`Naive vs GCs only` = (Corticosteroid == 1 & Anti.IL1 != 1 & Anti.IL6 != 1 & DMARDs != 1) | Naive == 1, `Naive vs aIL1 only` = (Corticosteroid != 1 & Anti.IL1 == 1 & Anti.IL6 != 1 & DMARDs != 1) | Naive == 1, `GCs only vs GCs + aIL1` = (Corticosteroid == 1 & Anti.IL1 != 1 & Anti.IL6 != 1 & DMARDs != 1) | (Corticosteroid == 1 & Anti.IL1 == 1 & Anti.IL6 != 1 & DMARDs != 1), `aIL1 only vs GCs + aIL1` = (Corticosteroid != 1 & Anti.IL1 == 1 & Anti.IL6 != 1 & DMARDs != 1) | (Corticosteroid == 1 & Anti.IL1 == 1 & Anti.IL6 != 1 & DMARDs != 1), `Naive vs GCs + aIL1` = (Corticosteroid == 1 & Anti.IL1 == 1 & Anti.IL6 != 1 & DMARDs != 1) | Naive == 1, Anti.IL12 = Anti.IL1, Corticosteroid2 = Corticosteroid) %>%
-        select(Naive, Anti.IL1, Corticosteroid, Corticosteroid2, Anti.IL12, selected_comb)
-    blocks <- list.map(seq(length(blocks) / 2), f(i) ~ filter(blocks, blocks[, i + length(blocks) / 2] == TRUE) %>% select(i)) %>% setNames(selected_comb)
-    blocks[[1]] <- mutate(blocks[[1]], Naive = ifelse(Naive == 1, 0, 1))
-    # blocks[[2]] <- mutate(blocks[[2]], Anti.IL1 = ifelse(Anti.IL1 == 1, 0, 1))
-} else {
-    blocks <- list.map(colnames(blocks), f(i) ~ select(blocks, i))
-}
+blocks <- set_names(
+  blocks, 
+  c(
+    "Control vs Naive", 
+    c("GCs", "aIL1") %>% paste(., "Non-responder vs", ., "Responder"), 
+    c("GCs", "aIL1") %>% paste(., "Naive vs", ., "Responder")
+  )
+)
 ```
 
 # DGEA
@@ -416,14 +394,23 @@ if ("Corticosteroid" %in% colnames(blocks)) {
 # comparison <- cbind(setA, setB)
 # exprs_threshold <- 1 * NCOL(counts_matrix)
 l_de0 <- list.map(blocks, f(i, j) ~ {
-  countData <- filtered_counts %>% select(rownames(i))
-  # if (j < 5)
-  #   DESeqDataSetFromMatrix(
-  #       countData = countData,
-  #       colData = i,
-  #       design = ~ batch + group
-  #   ) %>% DESeq()
-  # else
+  weigth_1 <- 1
+  if (j == 1) {
+    weigth_2 <- 3
+  } else if (j == 2) {
+    weigth_2 <- 4
+  } else if (j == 3) {
+    weigth_1 <- 3 ->  weigth_2
+  } else if (j == 4) {
+    weigth_1 <- 4 ->  weigth_2
+  } else if (j == 5) {
+    weigth_1 <- 5 ->  weigth_2
+  }
+    k <- lapply(c(0, 1), function(j) filter(i, group == j)) %>%
+        .[c(rep(1, weigth_1), rep(2, weigth_2))]
+    i <- list.rbind(k)
+    countData <- filtered_counts[, sapply(k, rownames) %>% unlist()] %>%
+      set_colnames(rownames(i))
     DESeqDataSetFromMatrix(
         countData = countData,
         colData = i,
@@ -580,7 +567,7 @@ fc_cut <- c(0.5, 1.5)
 de_genes1 <- list.map(l_de2, f(i) ~ {
     list.map(c("Up-regulated", "Down-regulated"), f(j) ~ {
       filter(i, Expression == j) %>%
-        get_top0(0.5, 0.05, 2000) %>%
+        get_top0(1, 0.05, 200) %>%
             rownames() %>%
             str_remove_all("_\\d") %>%
             unique()
