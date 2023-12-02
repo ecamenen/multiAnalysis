@@ -14,6 +14,7 @@ knitr::opts_chunk$set(
 )
 ```
 
+# Metadata
 ```{r, eval = FALSE}
 library("readxl")
 blocks0 <- lapply(
@@ -74,7 +75,7 @@ blocks0[[i]]$Other...10[nrow(blocks0[[i]]):(nrow(blocks0[[i]]) - length(tmp0) + 
       c(tmp[[1]], paste(tmp[2:length(tmp)], collapse = " "))
     }
       }
-    ) %>% set_names(blocks0[[i]]$`Patient ID`)
+    ) %>% set_colnames(blocks0[[i]]$`Patient ID`)
     }
   )
   }
@@ -85,6 +86,112 @@ names(tmp[[i]]) %>%
   lapply(function(x) tmp[[i]][[x]][1, ] %>% fct_count() %>% arrange(desc(n))) %>%
   set_names(names(tmp[[i]]))
 
+# tmp[[1]]$NSAIDs[, "1001"] <- c("Methylprednisone", "Partial response")
+ifelse(blocks0[[2]]$`Patient global situation` == "Complete remission", 1, 0)
+# Response
+y <- 1
+responses0 <- names(tmp[[i]]) %>%  
+    lapply(function(x)
+        tmp[[i]][[x]][y, ] %>% 
+        str_replace_all(".*(artial).*", "P\\1") %>% 
+            str_replace_all(".*nkn?own", "Unknown") %>% 
+               str_replace_all(".*(omplete).*", "C\\1") %>% 
+               to_title()
+           ) %>% 
+  list.cbind() %>%
+  set_colnames(names(tmp[[i]])) %>%
+  as.data.frame() %>%
+  select(-contains("global"))
+responses0 <- apply(responses0, 2, function(x) na.omit(x) %>% length()) %>%
+  sort(TRUE) %>% 
+  names() %>% 
+  select(responses0, .)
+responses0[responses0 == "Response"] <- "Unknown"
+# responses0[responses0 == "Unknown"] <- NA
+responses <- gather(responses0, "treatment", "response") %>%
+    relocate("response", .before = 1)
+
+response_levels <- c("Complete", "Partial", "Loss of efficacy", "No response")
+responses %>% 
+  filter(!is.na(response)) %>%
+  GimmeMyPlot:::plot_bar_2cat(
+    threshold = 1,
+    method = "fisher",
+    colour1 = c("red", brewer.pal(4, "Greens")[-1]) %>% rev(),
+    legend = response_levels
+)
+
+responses %>% 
+    filter(!is.na(response)) %>% 
+    GimmeMyPlot:::post_hoc_chi2(method = "fisher") %>%
+    arrange(desc(p))
+
+# Response per drugs
+# t_drugs_v1 <- responses0
+# data("list_treat")
+list.map(
+  colnames(get(paste0("t_drugs_v", i))),
+  f(x) ~{
+  cbind(select(get(paste0("t_responses_v", i)), x), select(get(paste0("t_drugs_v", i)), x)) %>%
+    set_colnames(c("Response", "Drugs")) %>% 
+    filter(!is.na(Drugs)) %>%
+    plot_alluvial() +
+      ggtitle(x) +
+      theme(
+        axis.text.x = element_blank(),
+        axis.title = element_blank()
+        )
+  }) %>%
+  plot_grid(
+    plotlist = .,
+    nrow = 2,
+    ncol = 3,
+    align = "hv"
+)
+
+j <- 1
+for (i in rev(response_levels)) {
+  t_responses_v1[t_responses_v1 == i] <- j
+  j <- j + 1
+}
+t_responses_v1 <- t_responses_v1 %>% 
+  apply(2, as.numeric) %>%
+  as.data.frame() %>%
+  mutate(Naive = ifelse(emna_treat[[2]]$Naive == 1, 1, 0)) %>%
+  set_rownames(rownames(emna_treat[[2]])) %>%
+  select(order_resp)
+
+order_resp <- t_responses_v1 %>%
+  apply(2, function(x) na.omit(x) %>% length()) %>% 
+  sort(TRUE) %>% names()
+
+for (i in rev(order_resp)) {
+  t_responses_v1 <- arrange(t_responses_v1, desc(!!sym(i)))
+}
+
+t_responses_v1 %>%
+  mutate(ID = rownames(.)) %>%
+gather("treatment", "Response", -ID) %>%
+  mutate(treatment = factor(treatment, levels = order_resp)) %>%
+    ggplot(aes(ID, treatment, fill = Response)) + 
+    geom_tile() +
+    scale_fill_manual(
+      values = c("black", "red", brewer.pal(4, "Greens")[-1]),
+      na.value = "grey",
+      labels = c(rev(response_levels), "No treatment")
+    ) +
+    theme_classic() +
+    theme(
+        axis.title = element_blank(),
+        axis.text.x = element_text(size = 10, color = "grey"),
+        axis.ticks = element_blank(),
+        axis.line = element_blank(),
+        axis.text.y = element_text(size = 20, color = "grey"),
+        legend.title = element_text(face = "bold.italic", size = 25),
+        legend.text = element_text(size = 17, color = "grey")
+    )
+
+# Name of drugs per type of treatment
 names(tmp[[i]]) %>% 
   discard(function(x) str_detect(x, "IL6")) %>%
   list.map(f(x) ~ {
