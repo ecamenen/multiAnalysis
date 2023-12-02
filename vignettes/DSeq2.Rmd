@@ -206,7 +206,7 @@ plot_grid(
     align = "hv"
 )
 
-
+# Most frequent drugs
 list.map(
   seq(2),
   f(i, j) ~ {
@@ -248,6 +248,7 @@ plot_grid(
     rel_heights = c(2, 1)
 )
 
+# Most frequent treatment types
 cols <- c(1, 1, "#E41A1C", "#BAE4B3", "#238B45", "#74C476", "#984EA3", "#FF7F00",  "#F781BF")
 
 list.map(
@@ -437,13 +438,17 @@ blocks <- lapply(
 
 ```{r}
 blocks1 <- blocks
+
 GCC_V2 <- filter(blocks[[2]], Corticosteroid == 1 & `Anti-IL1` != 1 & `Anti-IL6` != 1 & `NSAIDs` != 1 & `DMARDs` != 1 & `Other` != 1  & `Anti-TNF` != 1) %>%
+    rownames()
+GCC_aIL1_V2 <- filter(blocks[[2]], Corticosteroid == 1 & `Anti-IL1` == 1 & `Anti-IL6` != 1 & `NSAIDs` != 1 & `DMARDs` != 1 & `Other` != 1  & `Anti-TNF` != 1) %>%
+    rownames()
+GCC_aIL1_V1 <- filter(blocks[[1]], Corticosteroid == 1 & `Anti-IL1` == 1 & `Anti-IL6` != 1 & `NSAIDs` != 1 & `DMARDs` != 1 & `Other` != 1  & `Anti-TNF` != 1) %>%
     rownames()
 aIL1_V2 <- filter(blocks[[2]], Corticosteroid != 1 & `Anti-IL1` == 1 & `Anti-IL6` != 1) %>%
     rownames()
 naive <- filter(blocks[[1]], Naive == 1) %>%
-    rownames() %>%
-    as.numeric()
+    rownames()
 GCC_V1 <- filter(blocks[[1]], Corticosteroid == 1 & `Anti-IL1` != 1 & `Anti-IL6` != 1 & `NSAIDs` != 1 & `DMARDs` != 1 & `Other` != 1 & `Anti-TNF` != 1) %>%
     rownames()
 aIL1_V1 <- filter(blocks[[1]], Corticosteroid != 1 & `Anti-IL1` == 1 & `Anti-IL6` != 1 & `NSAIDs` != 1 & `DMARDs` != 1 & `Other` != 1 & `Anti-TNF` != 1) %>%
@@ -459,8 +464,8 @@ blocks <- list.map(list(control, naive), f(i, k) ~ data.frame(id = i, group = fa
     select(-id) %>%
     list()
 
-blocks[2:3] <- list.map(
-  c("GCC", "aIL1"), 
+blocks[2:4] <- list.map(
+  c("GCC", "aIL1", "GCC_aIL1"), 
   f(x) ~ {
   list.map(
     c("A", "B"),
@@ -471,8 +476,8 @@ blocks[2:3] <- list.map(
   }) %>% list.rbind()
 })
 
-blocks[4:5] <- list.map(
-  list(GCC_V2, aIL1_V2), 
+blocks[5:7] <- list.map(
+  list(GCC_V2, aIL1_V2, GCC_aIL1_V2), 
   f(i, j, k) ~ {
     data.frame(id = rep(i, 2), group = rep(c(0, 1), each = length(i)) %>% factor()) %>% 
       mutate(
@@ -482,14 +487,24 @@ blocks[4:5] <- list.map(
       column_to_rownames(var = "id")
     })
 
-blocks[[5]]$batch <- rep(1, 6) %>% factor()
+blocks[8:10] <- list.map(
+  c("GCC", "aIL1", "GCC_aIL1"), 
+  f(x) ~ {
+  list.map(list(naive, get(paste0(x, "_V1"))), f(i, k) ~ data.frame(id = i, group = factor(k - 1))) %>%
+    list.rbind() %>%
+    arrange(id) %>%
+    set_rownames(pull(., id) %>% paste0("A.", .)) %>%
+    mutate(batch = batches[names(batches) %in% id] %>% factor()) %>%
+    select(-id)
+})
 
 blocks <- set_names(
   blocks, 
   c(
     "Control vs Naive", 
-    c("GCs", "aIL1") %>% paste(., "Non-responder vs", ., "Responder"), 
-    c("GCs", "aIL1") %>% paste(., "Naive vs", ., "Responder")
+    c("GCs", "aIL1", "GCC+aIL1") %>% paste(., "Non-responder vs", ., "Responder"), 
+    c("GCs", "aIL1", "GCC+aIL1") %>% paste(., "Naive vs", ., "Responder"),
+    c("GCs", "aIL1", "GCC+aIL1") %>% paste("Naive vs", ., "Non-responder")
   )
 )
 ```
@@ -507,11 +522,19 @@ l_de0 <- list.map(blocks, f(i, j) ~ {
   } else if (j == 2) {
     weigth_2 <- 4
   } else if (j == 3) {
-    weigth_1 <- 3 ->  weigth_2
+    weigth_1 <- 3
+    weigth_2 <- 5
   } else if (j == 4) {
-    weigth_1 <- 4 ->  weigth_2
+    weigth_1 <- 3
+    weigth_2 <- 4
   } else if (j == 5) {
+    weigth_1 <- 4 ->  weigth_2
+  } else if (j == 6) {
     weigth_1 <- 5 ->  weigth_2
+  } else if (j == 7) {
+    weigth_1 <- 4 ->  weigth_2
+  } else if (j %in% 9:10) {
+    weigth_2 <- 4
   }
     k <- lapply(c(0, 1), function(j) filter(i, group == j)) %>%
         .[c(rep(1, weigth_1), rep(2, weigth_2))]
