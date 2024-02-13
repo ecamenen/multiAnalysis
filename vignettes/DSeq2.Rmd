@@ -637,35 +637,50 @@ res %>%
     arrange(desc(log2FoldChange)) %>%
     head()
 i <- 2
-plot_count <- function(i, gene = gene, cex = 1.5) {
+plot_count <- function(i, gene = gene, cex = 1.5, colour = get_colors()[c(5, 3)], ...) {
     name <- str_split(names(blocks)[i], " vs ")[[1]]
-    plotCounts(l_de0[[i]], gene = gene, intgroup = "group", returnData = TRUE) %>%
-    mutate(group = factor(group, labels = c(name[1], name[2]))) %>%
-    ggplot(aes(x = group, y = count, color = group)) +
-    geom_point(position = position_jitter(w = 0.1, h = 0), size = cex * 3, alpha = 0.5) +
-    geom_text_repel(aes(label = colnames(l_de0[[i]]), x = group, y = count, color = group), size = cex * 3) +
-    scale_y_log10() +
-    theme_bw() +
-    labs(
-        y = "Count",
-        x = gene
-    ) +
-    scale_color_manual(values = get_colors()[c(2, 4)], name = gene) +
-    theme(
-        legend.position = "none",
-        axis.text = element_text(colour = "gray50", size = cex * 10),
-        axis.title = element_text(colour = "gray50", size = cex * 12, face = "bold.italic"),
-        axis.ticks = element_blank(),
-        panel.grid.major.x = element_blank(),
-        panel.border = element_blank()
+    tmp0 <- l_de2[[i]] %>% filter(rownames(.) == gene)
+    subtitle <- paste0(
+      "P = ", 
+      tmp0 %>% pull(padj) %>% format(digits = 1, scientific = TRUE),
+      ", FC = ",
+    tmp0 %>% pull(log2FoldChange) %>%`^`(2, .) %>% round(0)
     )
+    tmp <- plotCounts(l_de0[[i]], gene = gene, intgroup = "group", returnData = TRUE) %>%
+      filter(rownames(.) %in% rownames(blocks[[i]])) 
+    lapply(0:1, function(x) filter(tmp, group == x) %>% select(-group)) %>%
+    list_cbind0() %>%
+    set_colnames(name) %>% 
+      set_rownames(rownames(.) %>% str_remove_all("A\\.")) %>%
+      plot_violin(title = gene, colour = colour, width_text = 1, stats = FALSE, pch_size = 2, pch_alpha = 0.5, pch_colour = "grey30", label = TRUE, subtitle = subtitle, ..., width_label = 4) +
+    # mutate(group = factor(group, labels = c(name[1], name[2]))) %>%
+    # ggplot(aes(x = group, y = count, color = group)) +
+    # geom_point(position = position_jitter(w = 0.1, h = 0), size = cex * 3, alpha = 0.5) +
+    # geom_text_repel(aes(label = colnames(l_de0[[i]]), x = group, y = count, color = group), size = cex * 3) +
+    scale_y_log10() # +
+    # theme_bw() +
+    # labs(
+    #     y = "Count",
+    #     x = gene
+    # ) +
+    # scale_color_manual(values = get_colors()[c(2, 4)], name = gene) +
+    # theme(
+    #     legend.position = "none",
+    #     axis.text = element_text(colour = "gray50", size = cex * 10),
+    #     axis.title = element_text(colour = "gray50", size = cex * 12, face = "bold.italic"),
+    #     axis.ticks = element_blank(),
+    #     panel.grid.major.x = element_blank(),
+    #     panel.border = element_blank()
+    # )
 }
-plot_count(i, "VEGFA")
+lapply(c("CXCL10", "TNFAIP6", "SOCS3", "BATF", "PIM1", "BIRC5", "AURKA", "MTHFD2", "SERPING1", "CFB", "CLU", "MMP2"), function(x) plot_count(i, x, index = "iqr", probalities = c(0.4, 0.85), weight = 1))  %>%
+    plot_grid(plotlist = ., nrow = 3, ncol = 3)
+  
 
 list.map(top_genes[[i]], f(x) ~ plot_count(i, gene = x) + ylab("")) %>% plot_grid(
     plotlist = .,
-    nrow = 3,
-    ncol = 3,
+    nrow = 2,
+    ncol = 2,
     align = "hv"
 )
 # use_data(l_de_manif, overwrite = TRUE)
