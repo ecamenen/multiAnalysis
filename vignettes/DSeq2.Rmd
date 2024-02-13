@@ -746,6 +746,58 @@ get_intersection(top_genes[[2]], 3)
 filtered <- names(top_genes[[1]]) %>% str_detect("Naive") %>% which()
 ```
 
+# Network
+```{r, eval = FALSE}
+t_genes <- list.map(
+    unlist(de_genes1[[1]]), 
+    f(x) ~ {
+        plotCounts(
+            l_de0[[1]], 
+            gene = x, 
+            intgroup = "group", 
+            returnData = TRUE
+        )  %>% 
+            dplyr::select(-group) %>% 
+            set_colnames(x)
+    }
+) %>% Reduce(cbind, .)
+t_genes <- t_genes[rownames(t_genes) %in% paste0("A.", c(naive, control)), ]
+m2 <-  correlate(t_genes, cutoff = 0.7)
+edge <- Edge(m3$r, m3$p)
+as.matrix(edge)  %>% as.data.frame() %>% filter(from %in% n_genes) %>% filter(to %in% n_genes) -> edge
+class(edge) <- c("Edge", class(edge))
+node <- Node(edge, scale = FALSE)
+edge$label <- as.numeric(edge$label)
+edge$weight <- as.numeric(edge$weight)
+cex <- 1
+colour_edge = c("#C6C6C6", "#C6C6C6")
+colour_node = c("white", "black")
+  edge$color <- ifelse(
+    edge$weight > 0,
+    colour_edge[1],
+    colour_edge[2]
+  )
+  
+  plot_network_dyn(
+    dashed = FALSE,
+    node = node,
+    edge = edge,
+    cex = cex,
+    cex_edge = edge$weight * 20 * cex,
+    color = c(colour_node[1], colour_node[2]),
+    mass = 2
+) %>% visOptions(manipulation = TRUE) %>%
+    visInteraction(navigationButtons = TRUE)
+as.matrix(n) %>% as.data.frame() %>% arrange(desc(size)) %>% head(20)
+plot_cor_network(m = m)
+
+n_genes <- as.matrix(node) %>% as.data.frame() %>% filter(as.numeric(size) < 40) %>% pull(id)
+# n_genes <- as.matrix(node) %>% as.data.frame() %>% arrange(desc(size)) %>% head(7) %>% pull(id)
+as.matrix(node) %>% as.data.frame() %>% column_to_rownames("id") %>% mutate(size = as.numeric(size))  %>% plot_bar(colour = c("#99000D", "gray"), n = 15)
+as.matrix(node) %>% as.data.frame() %>% pull(size) %>% as.numeric() %>% plot_violin(pch_size = 2, pch_colour = "grey30", pch_alpha = 0.25)
+counts_matrix %>% filter(rownames(.) %in% n_genes) %>% pull(ensembl_gene_id)
+get_genes_path(enriched[[1]][[1]][-3], n_genes, detect = "Genes", name = "Term", cutoff = 1)
+```
 
 # ORA
 ```{r}
