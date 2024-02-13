@@ -51,7 +51,6 @@ emna_treat <- lapply(
 ) %>% set_names(paste0("V", seq(2)))
 use_data(emna_treat, overwrite = TRUE)
 
-# blocks0[[1]]$`Other...10`[1] <- "Singulair complete response"
 tmp <- lapply(
   seq(2),
   function(i) {
@@ -89,14 +88,14 @@ names(tmp[[i]]) %>%
 # tmp[[1]]$NSAIDs[, "1001"] <- c("Methylprednisone", "Partial response")
 ifelse(blocks0[[2]]$`Patient global situation` == "Complete remission", 1, 0)
 # Response
-y <- 1
+y <- 2
 responses0 <- names(tmp[[i]]) %>%  
     lapply(function(x)
         tmp[[i]][[x]][y, ] %>% 
         str_replace_all(".*(artial).*", "P\\1") %>% 
             str_replace_all(".*nkn?own", "Unknown") %>% 
                str_replace_all(".*(omplete).*", "C\\1") %>% 
-               to_title()
+               GimmeMyPlot:::to_title()
            ) %>% 
   list.cbind() %>%
   set_colnames(names(tmp[[i]])) %>%
@@ -107,19 +106,37 @@ responses0 <- apply(responses0, 2, function(x) na.omit(x) %>% length()) %>%
   names() %>% 
   select(responses0, .)
 responses0[responses0 == "Response"] <- "Unknown"
-# responses0[responses0 == "Unknown"] <- NA
-responses <- gather(responses0, "treatment", "response") %>%
+responses0[responses0 == "Unknown"] <- NA
+responses0 <- mutate(responses0, ID = blocks0[[1]]$`Patient ID`)
+responses <- gather(responses0, "treatment", "response", -ID) %>%
     relocate("response", .before = 1)
 
 response_levels <- c("Complete", "Partial", "Loss of efficacy", "No response")
-responses %>% 
+
+responses %>%
   filter(!is.na(response)) %>%
   GimmeMyPlot:::plot_bar_2cat(
     threshold = 1,
     method = "fisher",
     colour1 = c("red", brewer.pal(4, "Greens")[-1]) %>% rev(),
-    legend = response_levels
+    legend = response_levels,
+    workspace = 1e8
 )
+
+responses1 <- full_join(t_responses_v1, t_drugs_v1, by = c("ID", "treatment"))
+filter(responses1, treatment == "Anti-IL1") %>%
+    # filter(ID %in% GC_aIL1) %>% 
+    rename(response = "response.x") %>% 
+    rename(drug = "response.y") %>%
+    filter(!is.na(response)) %>%
+    select(-c(ID, treatment)) %>%
+  GimmeMyPlot:::plot_bar_2cat(
+    # threshold = 1,
+    method = "fisher",
+    colour1 = c("red", brewer.pal(4, "Greens")[-1]) %>% rev() %>% .[-c(3)],
+    legend = response_levels[-c(3)],
+    workspace = 1e8
+) -> p00
 
 responses %>% 
     filter(!is.na(response)) %>% 
@@ -127,7 +144,7 @@ responses %>%
     arrange(desc(p))
 
 # Response per drugs
-# t_drugs_v1 <- responses0
+# t_responses_v1 <- responses0 %>% set_rownames(blocks0[[1]]$`Patient ID`)
 # data("list_treat")
 list.map(
   colnames(get(paste0("t_drugs_v", i))),
@@ -191,19 +208,25 @@ gather("treatment", "Response", -ID) %>%
         legend.text = element_text(size = 17, color = "grey")
     )
 
+y_type <- list(aIL1, GC)
+y_type <- list(GC_aIL1, GC_aIL1)
 # Name of drugs per type of treatment
 names(tmp[[i]]) %>% 
-  discard(function(x) str_detect(x, "IL6")) %>%
-  list.map(f(x) ~ {
+  keep(function(x) str_detect(x, "(IL1|Cortico)")) %>%
+  # discard(function(x) str_detect(x, "IL6")) %>%
+  list.map(f(x, y) ~ {
     tmp0 <- tmp[[i]][[x]][1, ]
     tmp0[tmp0 == "Response"] <- NA
+    tmp0 <- tmp0[y_type[[y]]]
     plot_pie(tmp0, title = x)
-  }) %>%
+  }) -> p2
+
 plot_grid(
-    plotlist = .,
+    plotlist = c(p, p2),
     nrow = 2,
-    ncol = 3,
-    align = "hv"
+    ncol = 2,
+    align = "hv",
+    byrow = FALSE
 )
 
 # Most frequent drugs
@@ -272,11 +295,11 @@ plot_bar(
 )
 
 emna_treat[[i]] %>%
-  select(-c("Colchicine", "Anti-TNF")) %>% 
+  select(-c("Colchicine", "Anti-TNF", "Naive")) %>% 
   apply(2, function(x) ifelse(x == 0, "No", "Yes")) %>%
   plot_alluvial()
 
-# blocks1[[1]][c(naive, GCC_V1, aIL1_V1), ] %>%
+# blocks1[[1]][c(naive, GC_V1, aIL1_V1), ] %>%
 #   select(c("Corticosteroid", "Naive", "Anti-IL1")) %>% 
 #   apply(2, function(x) ifelse(x == 0, "No", "Yes")) %>%
 #   plot_alluvial()
