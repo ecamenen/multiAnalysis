@@ -436,22 +436,18 @@ blocks <- lapply(
     set_names("Control vs Disease")
 ```
 
-```{r}
+```{r, eval = FALSE}
 blocks1 <- blocks
 
-GCC_V2 <- filter(blocks[[2]], Corticosteroid == 1 & `Anti-IL1` != 1 & `Anti-IL6` != 1 & `NSAIDs` != 1 & `DMARDs` != 1 & `Other` != 1  & `Anti-TNF` != 1) %>%
-    rownames()
-GCC_aIL1_V2 <- filter(blocks[[2]], Corticosteroid == 1 & `Anti-IL1` == 1 & `Anti-IL6` != 1 & `NSAIDs` != 1 & `DMARDs` != 1 & `Other` != 1  & `Anti-TNF` != 1) %>%
-    rownames()
-GCC_aIL1_V1 <- filter(blocks[[1]], Corticosteroid == 1 & `Anti-IL1` == 1 & `Anti-IL6` != 1 & `NSAIDs` != 1 & `DMARDs` != 1 & `Other` != 1  & `Anti-TNF` != 1) %>%
-    rownames()
-aIL1_V2 <- filter(blocks[[2]], Corticosteroid != 1 & `Anti-IL1` == 1 & `Anti-IL6` != 1) %>%
+GC_aIL1 <- filter(blocks[[1]], Corticosteroid == 1 & `Anti-IL1` == 1 & `Anti-IL6` != 1 & `NSAIDs` != 1 & `DMARDs` != 1 & `Other` != 1  & `Anti-TNF` != 1) %>%
     rownames()
 naive <- filter(blocks[[1]], Naive == 1) %>%
     rownames()
-GCC_V1 <- filter(blocks[[1]], Corticosteroid == 1 & `Anti-IL1` != 1 & `Anti-IL6` != 1 & `NSAIDs` != 1 & `DMARDs` != 1 & `Other` != 1 & `Anti-TNF` != 1) %>%
+treated <-  filter(blocks[[1]], Naive != 1) %>%
     rownames()
-aIL1_V1 <- filter(blocks[[1]], Corticosteroid != 1 & `Anti-IL1` == 1 & `Anti-IL6` != 1 & `NSAIDs` != 1 & `DMARDs` != 1 & `Other` != 1 & `Anti-TNF` != 1) %>%
+GC <- filter(blocks[[1]], Corticosteroid == 1 & `Anti-IL1` != 1 & `Anti-IL6` != 1 & `NSAIDs` != 1 & `DMARDs` != 1 & `Other` != 1 & `Anti-TNF` != 1) %>%
+    rownames()
+aIL1 <- filter(blocks[[1]], Corticosteroid != 1 & `Anti-IL1` == 1 & `Anti-IL6` != 1 & `NSAIDs` != 1 & `DMARDs` != 1 & `Other` != 1 & `Anti-TNF` != 1) %>%
     rownames()
 
 batches <- batches[common_rows]
@@ -465,32 +461,9 @@ blocks <- list.map(list(control, naive), f(i, k) ~ data.frame(id = i, group = fa
     list()
 
 blocks[2:4] <- list.map(
-  c("GCC", "aIL1", "GCC_aIL1"), 
+  c("GC", "aIL1", "GC_aIL1"), 
   f(x) ~ {
-  list.map(
-    c("A", "B"),
-    f(i, j) ~ {
-    data.frame(id = get(paste0(x, "_V", j)), group = factor(j - 1)) %>% 
-        mutate(batch = batches[names(batches) %in% id] %>% factor()) %>% 
-        column_to_rownames(var = "id")
-  }) %>% list.rbind()
-})
-
-blocks[5:7] <- list.map(
-  list(GCC_V2, aIL1_V2, GCC_aIL1_V2), 
-  f(i, j, k) ~ {
-    data.frame(id = rep(i, 2), group = rep(c(0, 1), each = length(i)) %>% factor()) %>% 
-      mutate(
-        batch = rep(batches[names(batches) %in% id], 2) %>% factor(), 
-        id = paste0(rep(c("A", "B"), each = length(i)), ".", id)
-        ) %>% 
-      column_to_rownames(var = "id")
-    })
-
-blocks[8:10] <- list.map(
-  c("GCC", "aIL1", "GCC_aIL1"), 
-  f(x) ~ {
-  list.map(list(naive, get(paste0(x, "_V1"))), f(i, k) ~ data.frame(id = i, group = factor(k - 1))) %>%
+  list.map(list(naive, get(x)), f(i, k) ~ data.frame(id = i, group = factor(k - 1))) %>%
     list.rbind() %>%
     arrange(id) %>%
     set_rownames(pull(., id) %>% paste0("A.", .)) %>%
@@ -498,13 +471,22 @@ blocks[8:10] <- list.map(
     select(-id)
 })
 
+blocks[[5]] <- list.map(
+    list(naive, treated),
+    f(i, j) ~ {
+    data.frame(id = i, group = factor(j - 1)) %>% 
+      arrange(id) %>%
+      set_rownames(pull(., id) %>% paste0("A.", .)) %>%
+      mutate(batch = batches[names(batches) %in% id] %>% factor()) %>% 
+      select(-id)
+  }) %>% list.rbind()
+
 blocks <- set_names(
   blocks, 
   c(
-    "Control vs Naive", 
-    c("GCs", "aIL1", "GCC+aIL1") %>% paste(., "Non-responder vs", ., "Responder"), 
-    c("GCs", "aIL1", "GCC+aIL1") %>% paste(., "Naive vs", ., "Responder"),
-    c("GCs", "aIL1", "GCC+aIL1") %>% paste("Naive vs", ., "Non-responder")
+    "Control vs Naive",
+    c("GCs", "aIL1", "GCs+aIL1") %>% paste("Naive vs", ., "Non-responder"),
+    "Naive vs Treated"
   )
 )
 ```
@@ -516,26 +498,15 @@ blocks <- set_names(
 # comparison <- cbind(setA, setB)
 # exprs_threshold <- 1 * NCOL(counts_matrix)
 l_de0 <- list.map(blocks, f(i, j) ~ {
-  weigth_1 <- 1
-  if (j == 1) {
+  weigth_1 <- 1 -> weigth_2
+  if (j %in% c(1, 4)) {
     weigth_2 <- 3
-  } else if (j == 2) {
-    weigth_2 <- 4
   } else if (j == 3) {
-    weigth_1 <- 3
-    weigth_2 <- 5
-  } else if (j == 4) {
-    weigth_1 <- 3
     weigth_2 <- 4
   } else if (j == 5) {
-    weigth_1 <- 4 ->  weigth_2
-  } else if (j == 6) {
-    weigth_1 <- 5 ->  weigth_2
-  } else if (j == 7) {
-    weigth_1 <- 4 ->  weigth_2
-  } else if (j %in% 9:10) {
-    weigth_2 <- 4
+    weigth_2 <- 2
   }
+  
     k <- lapply(c(0, 1), function(j) filter(i, group == j)) %>%
         .[c(rep(1, weigth_1), rep(2, weigth_2))]
     i <- list.rbind(k)
