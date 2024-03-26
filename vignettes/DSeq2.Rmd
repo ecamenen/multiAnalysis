@@ -318,11 +318,22 @@ path <- file.path(cwd, "inst", "extdata")
 set_analysis(block_name = "emna_treat", type = "list", cwd = cwd)
 
 data("clinic")
+blocks <- clinic %>%
+  filter(!str_detect(C_2643_3798, "(suspi)|(angiosarcoma)|(Crohn)")) %>% set_rownames(pull(., "C_2643_3796") %>% as.numeric())
 control <- filter(clinic, str_detect(C_2643_3798, "control")) %>% pull(C_2643_3796) %>% as.numeric()
 
-batch_df <- read_tsv(file.path(path, "batch_rna.tsv")) 
+batch_df <- read_tsv(file.path(path, "batch_rna.tsv")) %>% arrange(Sample)
 batches <-  filter(batch_df, str_detect(Sample, "A"))
 batches <- pull(batches, 2) %>% set_names(pull(batches, 1) %>% str_remove_all("A05PB\\d") %>% as.numeric())
+
+gender <- clinic$C_2649_3888 %>% set_names(as.numeric(clinic$C_2643_3796))
+age <- clinic$C_2643_3803 %>% set_names(as.numeric(clinic$C_2643_3796))
+# disease_duration <- interval(
+#     (complete_date(clinic$C_2648_3887) %>% dmy()),
+#     (complete_date(clinic$C_2643_3802) %>% dmy())
+# ) %>%
+#   divide_by(years(1)) %>% 
+#   set_names(as.numeric(clinic$C_2643_3796))
 
 setEnrichrSite("Enrichr")
 dbs <- c("GO_Molecular_Function_2021", "GO_Biological_Process_2021", "Orphanet_Augmented_2021", "WikiPathway_2021_Human", "MSigDB_Hallmark_2020", "Reactome_2022")
@@ -334,7 +345,7 @@ library(organism, character.only = TRUE)
 ```{r}
 # Load the count matrix
 counts_matrix <- read_tsv(file = file.path(path, "gene_counts.tsv"))
-ids <- colnames(counts_matrix)[-1] %>% str_remove_all("[AB]05PB\\d") %>% as.numeric()
+# ids <- colnames(counts_matrix)[-1] %>% str_remove_all("[AB]05PB\\d") %>% as.numeric()
 # batch_df0 <- batch_df %>% pull(2) %>% set_names(pull(batch_df, 1))
 # batch_df0 <- batch_df0[colnames(counts_matrix)[-1]]
 # counts_matrix0 <- as.matrix(counts_matrix[, -1]) %>%
@@ -344,8 +355,8 @@ ids <- colnames(counts_matrix)[-1] %>% str_remove_all("[AB]05PB\\d") %>% as.nume
 # counts_combatseq <- mutate(counts_matrix0, gene_id = pull(counts_matrix, gene_id)) %>%
 #   relocate(gene_id)
 # use_data(counts_combatseq, overwrite = TRUE)
-data(counts_combatseq)
-counts_matrix <- counts_combatseq
+# data(counts_combatseq)
+# counts_matrix <- counts_combatseq[, -1] %>% round() %>% as.matrix() %>% vst() %>% as.data.frame() %>% mutate(gene_id = pull(counts_combatseq, gene_id)) %>% relocate(gene_id)
 ```
 
 # Extract visits and intersect common rows between data
@@ -382,10 +393,12 @@ l_visits <- list.map(
 counts_matrix <- l_visits[["A"]]
 gene_name <- str_remove_all(counts_matrix$gene_id, "\\.*")
 # Filter by common rows
-common_rows <- Reduce(intersect, list(colnames(counts_matrix), c(sapply(blocks, rownames) %>% unlist(), control), names(batches)))
+# common_rows <- Reduce(intersect, list(colnames(counts_matrix), c(sapply(blocks, rownames) %>% unlist(), control), names(batches)))
+common_rows <- Reduce(intersect, list(colnames(counts_matrix), c(rownames(blocks), control), names(batches)))
 counts_matrix <- lapply(l_visits, function(i) select(i, matches(paste0("^", common_rows, "$", collapse = "|")))) %>% list.cbind() %>% select(-contains("gene_id"))
 
-blocks <- list.map(blocks, f(i) ~ i %>% mutate(ID = rownames(.)) %>% filter(ID %in% common_rows) %>% select(-ID)) # %>% select(contains(c("Mucocutaneous", "Musculoskeletal", "Urticaria", "Myocarditis", "Anti-IL1", "Anti-IL6", "Corticosteroid", "DMARDs", "Kinase.Inhibitor", "Naive")))
+blocks <- blocks %>% mutate(ID = rownames(.)) %>% filter(ID %in% common_rows) %>% select(-ID)
+# blocks <- list.map(blocks, f(i) ~ i %>% mutate(ID = rownames(.)) %>% filter(ID %in% common_rows) %>% select(-ID)) # %>% select(contains(c("Mucocutaneous", "Musculoskeletal", "Urticaria", "Myocarditis", "Anti-IL1", "Anti-IL6", "Corticosteroid", "DMARDs", "Kinase.Inhibitor", "Naive")))
 
 # treat_v2 <- treat_v2 %>% mutate(ID = rownames(.)) %>% filter(ID %in% common_rows) %>% select(-ID) 
 
@@ -444,15 +457,25 @@ use_data(gene_query, overwrite = TRUE)
 ```
 
 ```{r, eval = FALSE}
+```{r}
+# blocks <- filter(blocks, !str_detect(C_2643_3798, "Negative"))
+# blocks <- lapply(
+#     c(TRUE, FALSE),
+#     function(x) filter(blocks, str_detect(C_2643_3798, "(AOSD)|(SOJIA)", negate = x)) %>% pull("C_2643_3796") %>% as.numeric() %>% unique()
+# ) %>%
 blocks <- lapply(
     # c("control", "(AOSD)|(SOJIA)"),
-    c("control", "osteitis"),
+    c("^((?!(AOSD)|(SOJIA)).)*$", "(AOSD)|(SOJIA)"),
+    # c("control", "osteitis"),
     function(x) filter(blocks, str_detect(C_2643_3798, x)) %>% pull("C_2643_3796") %>% as.numeric() %>% unique()
-) %>% 
+) %>%
     list.map(f(i, k) ~ data.frame(id = i, group = factor(k - 1))) %>%
     list.rbind() %>%
     arrange(id) %>%
     mutate(batch = batches[names(batches) %in% id] %>% factor()) %>%
+    mutate(gender = gender[names(gender) %in% id] %>% factor()) %>%
+    mutate(age = age[names(age) %in% id] %>% factor()) %>%
+    # mutate(disease_duration = disease_duration[names(disease_duration) %in% id] %>% factor()) %>%
     set_rownames(pull(., id) %>% paste0("A.", .)) %>%
     select(-id) %>%
     list() %>%
@@ -521,24 +544,11 @@ blocks <- set_names(
 # comparison <- cbind(setA, setB)
 # exprs_threshold <- 1 * NCOL(counts_matrix)
 l_de0 <- list.map(blocks, f(i, j) ~ {
-  weigth_1 <- 1 -> weigth_2
-  if (j %in% c(1, 4)) {
-    weigth_2 <- 3
-  } else if (j == 3) {
-    weigth_2 <- 4
-  } else if (j == 5) {
-    weigth_2 <- 2
-  }
-  
-    k <- lapply(c(0, 1), function(j) filter(i, group == j)) %>%
-        .[c(rep(1, weigth_1), rep(2, weigth_2))]
-    i <- list.rbind(k)
-    countData <- filtered_counts[, sapply(k, rownames) %>% unlist()] %>%
-      set_colnames(rownames(i))
+  countData <- filtered_counts %>% select(rownames(i))
     DESeqDataSetFromMatrix(
         countData = countData,
         colData = i,
-        design = ~ group
+        design = ~ batch + group
     ) %>% DESeq()
 })
 # results() %>%
