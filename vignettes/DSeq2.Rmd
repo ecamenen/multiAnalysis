@@ -1136,6 +1136,258 @@ list.map(
 }) -> pp
 ```
 
+```{r}
+i <- 1
+name_immu <- c("(omplement)|(C2 )", "neutrophil", "(immun)|(inflammatory)", "(interleukins?)|(IL-?\\d)", "(interferon)|(IFN[ABG])", "mhc", "natural killer cell", "STAT[ 35]", "(macrophage)|(monocyte)", "(tumor necrosis factor)|(TNF)(NF-k)", "phago((cytosis)|(some))", "(Toll-like)|(TLR )", "leukocyte", " [BT] cell", "cytokine[^sis]", "RAGE", "(rostaglandin)|(arachidonic)|(icosa)", "(PUMA)|(TP53)|( p53)", "mTORC1")
+dgea <- enriched0[[i]]
+top_genes00 <- name_immu %>% lapply(function(x) get_genes_path0(dgea[-3], x)) %>% set_names(name_immu)
+top_genes01 <- name_immu %>% lapply(function(x) get_genes_path0(list(enrich_kegg0[[i]]), x, name = "geneID", detect = "Description", p_adjust = "p.adjust", split_pattern = "/", path = "Description")) %>% set_names(name_immu)
+top_genes0 <- top_genes00 %>% lapply(function(x) unlist(x) %>% unname() %>% unique() %>% sort()) %>% set_names(name_immu) %>% compact()
+top_genes01 <- top_genes01 %>% lapply(function(x) unlist(x) %>% unname() %>% unique() %>% sort()) %>% set_names(name_immu) %>% compact()
+top_genes1 <- unlist(top_genes0) %>% sort() %>% unname() %>% unique()
+top_genes1 <- unlist(top_genes01) %>% bitr(fromType = "ENTREZID", toType = "SYMBOL", OrgDb = get(organism)) %>% pull(SYMBOL) %>% c(top_genes1) %>% sort() %>% unname() %>% unique()
+top_genes <- c(immu_genes0, top_genes1) %>% unique() %>% sort()
+
+list.map(
+  c("Up-regulated", "Down-regulated"),
+  f(x) ~ intersect(de_genes1$`Control vs Disease`[[x]], top_genes)
+)
+
+# setdiff(top_genes, unlist(de_genes1$`Control vs Disease`))
+```
+
+```{r, eval = FALSE}
+format_path <- function(x, width = 20) {
+  str_remove_all(x, "\\(.*\\)") %>%
+      str_remove_all("((ORPHA)|(WP)|(HSA)|(R-)).*") %>%
+      str_trunc2(width) %>%
+      str_trim() %>%
+      # sort() %>%
+      to_title()
+}
+
+"(interleukins?)|(IL-?\\d)" %>%  get_genes_path0(dgea[-3], .) %>% pluck(1) %>% list.flatten() %>% set_names(names(.) %>% str_remove_all(".*\\.") %>% format_path(1000)) %>% plot_venn(n = 8, label = TRUE) + theme(legend.position = "none")
+```
+
+
+```{r, eval = FALSE}
+for (i in seq_along(p)) {
+  for (j in seq_along(p[[i]])) {
+i <- names(p)[i]
+j <- names(p[[i]])[j]
+tiff(
+    file.path(path_img, "batch5", paste0("enrichr_", j, "_", i, ".tiff")),
+    units = "px",
+    width = 8000,
+    height = 4000,
+    res = 300
+)
+p[[i]][[j]]
+dev.off()
+# save_tiff(p[[i]][[j]], file.path(path_img, paste0("enrichr_", j, "_", i, ".tiff")), 8000, 4000)
+  }
+}
+
+# l_enrich <- list.map(de_genes, f(x) ~ enrichr(x, dbs))
+# p <- list.map(l_enrich, f(i, j, k) ~ plot_enrich(i[[5]], n = 15, title = str_replace_all(k, "\\.", "-")))
+# plot_grid(
+#     plotlist = p[c(1, 4)],
+#     nrow = 1,
+#     ncol = 2,
+#     align = "hv"
+# )
+
+get_top0(l_de2[[1]], n = 15) %>%
+    rownames() %>% 
+    sort() %>%
+    get_genes_path(enriched[[1]][[1]][-3], ., detect = "Genes", name = "Term", cutoff = 1)
+enriched$`Up-regulated`$`Control vs Naive`[[1]] %>% as.data.frame() %>% filter(Adjusted.P.value <= 0.05) %>% arrange(desc(Combined.Score)) %>% head(15)
+l_de$`Control vs Naive` %>% rownames_to_column() %>% filter(rowname  == "")
+l_de2$`Control vs Naive` %>% get_top0(rank = TRUE) %>% filter(name  == "")
+```
+
+```{r, eval = FALSE} 
+sort(ids) %>% sapply(get_ncbi_gene) %>% as.data.frame() %>% write_tsv("temp.tsv")
+list.map(enriched[[1]][[1]], f(j) ~ filter(j, Adjusted.P.value <= 0.05) %>% select(c(1, 4, 9))) %>>% list.filter(.i != 3) %>% keep(function(x) nrow(x) > 0)
+
+list.map(enriched[[1]][[1]], f(j) ~ filter(j, Adjusted.P.value <= 0.05) %>% pull(Term)) %>>% list.filter(.i != 3) %>% compact() %>% unlist() %>% unname() %>% sort() %>% as.data.frame() %>% write_tsv(file = file.path(cwd, "path.tsv"), col_names = FALSE)
+
+list.map(enriched, f(i) ~ list.map(i, f(j) ~ filter(j, Adjusted.P.value <= 0.05) %>%
+    dplyr::select(c(1, 4, 9)) %>%
+    head(15)) %>% keep(function(x) nrow(x) > 0)) %>% compact() -> tmp0
+list.map(enriched0, f(i) ~ list.map(i, f(j) ~ filter(j, Adjusted.P.value <= 0.05) %>%
+    dplyr::select(c(1, 4, 9)) %>%
+    head(15)) %>% keep(function(x) nrow(x) > 0)) %>% compact() -> tmp1
+
+list.map(dbs, f(j) ~ list.filter(tmp0, f(i) ~ !is.null(i[[j]])) %>% list.names())
+# list.map(c(1, 3), f(i) ~ tmp[[2]][[i]] %>% plot_enrich(n = 15, cex = 0.85, title = str_replace_all(dbs[i], "_", " ")))
+
+de_genes1$`aIL1 Non-responder vs aIL1 Responder`[[1]] %>% get_genes_path(enriched[[1]][[3]][-3], ., detect = "Genes", name = "Term", cutoff = 1)
+
+# Compare GSEA with GO
+# ck2 <- list.map(de_genes1, f(i, j, k) ~ pluck(i, 2) %>% data.frame(Entrez = ., group = k)) %>%
+#     list.rbind() %>% 
+#   compareCluster(
+#     data = ., 
+#     geneClusters = Entrez ~ group,
+#     fun = enrichGO, 
+#     OrgDb = get(organism),
+#     keyType = "SYMBOL", 
+#     ont = "ALL"
+#     )
+# plot_enrich_gsea(ck0)
+# cnetplot0(ck0, cex = 1.5, n = 15)
+```
+
+```{r, eval = FALSE}
+ora <- list.map(
+  enriched, 
+  f(i) ~ {
+    list.map(
+      i,
+      f(j) ~ list.map(
+        j,
+        ~filter(., Adjusted.P.value <= 0.05) %>% 
+        pull(Term) %>% 
+        format_path(100)
+      )  %>>% 
+  list.filter(.i != 3) %>% 
+  compact() %>% 
+  unlist() %>% 
+  unname() %>%
+  sort() %>%
+  as.data.frame()
+    )
+    }
+  )
+
+lapply(ora, function(x) sapply(x, nrow))
+# dgeas <- list(enriched[[1]][[1]],  c(enriched[[1]][[3]], enriched[[2]][[3]]), enriched[[2]][[4]],  enriched[[2]][[5]])
+# dgeas <- list(enriched[[1]][[1]], enriched[[2]][[4]],  enriched[[2]][[5]])
+paths <- list.map(dgea, f(j) ~ filter(j, Adjusted.P.value <= 0.05) %>% pull(Term) %>% format_path(100)) %>>% list.filter(.i != 3) %>% compact() %>% unlist() %>% unname() %>% sort() %>% str_remove_all("(\\(.*)|((ORPHA)|(WP)|(HSA)|(R-)).*") %>% str_trim() %>% to_title() %>% as.data.frame()
+
+paths <- as.data.frame(enrich_kegg[[1]][[1]]) %>% filter(p.adjust <= 0.05) %>% pull(Description) %>% format_path(100) %>% sort() %>% to_title() %>% as.data.frame() %>% c(paths) %>% unlist() %>% sort() %>% as.data.frame()
+
+write_tsv(paths, file = file.path(cwd, "sd_ctr_up.tsv"), col_names  = FALSE)
+# name_immu0 <- c(name_immu, "cytokine(?!sis)" , "platelet")
+name_immu1 <- c("neutrophil", "natural killer cell", "macrophage", "leukocyte", " B cell", "T cell")
+# name_immu1 <- c("(complement)|(C2 )", "(immune)|(inflammatory)", "mhc", "STAT[ 35]", "(tumor necrosis factor)|(TNF)(NF-k)", "phago((cytosis)|(some))", "(Toll-like)|(TLR )", "WNT")
+name_immu1 <- c("(interferon)|(IFN[ABG])", "(interleukins?)|(IL-?\\d)")
+name_immu0 <- c("(omplement)|(C2 )", "neutrophil", "(interleukins?)|(IL-?\\d)", "(interferon)|(IFN[ABG])", "natural killer cell", "STAT[ 35]", "(macrophage)|(monocyte)", "(tumor necrosis factor)|(TNF)(NF-k)", "phago((cytosis)|(some))", "(Toll-like)|(TLR )", "leukocyte", " [BT] cell", "cytokine[^sis]", "RAGE", "(rostaglandin)|(arachidonic)|(icosa)", "(PUMA)|(TP53)|( p53)", "mTORC1")
+# TODO "monocytes?" granulocytes? MMP? NLRP? inflammasome? NK chemokine
+# (rostaglandin)|(strogen)|(female sexual)|(Mammary gland)
+# R[Hh][Oo]\\w? GTPase
+MHC Class II Antigen
+# ([Pp]latelet)|([Cc]oagulation)|(Hemostasis)|([Hh]eme)
+# (defense)|(immune)|(inflamm)
+top_genes <- cou[!str_detect(names(cou), "(neutrophil)|(fungus)|(regulation of immune)|(humoral)|(Cytokine)")]
+c("neutrophil", "fungus", "regulation of")
+
+# "(interleukins?)|(IL-?\\d)", "(interferon)|(IFN[ABG])", "NF-kB", "(rostaglandin)|(arachidonic)|(icosa)"
+# "eutrophil [Dd]egranulation", "macrophage", "monocyte", "endritic", "granulocyte", "B cell", "mononuclear", "leukocyte aggregation", "leukocyte differentiation", "leukocyte chemotaxis"
+
+  
+c("eutrophil [Dd]egranulation", "macrophage", "monocyte", "endritic", "granulocyte", "B cell", "mononuclear", "leukocyte aggregation", "leukocyte differentiation", "leukocyte chemotaxis") %>% lapply(function(x) get_genes_path0(dgea[-3], x) %>% suppressMessages() %>% unlist() %>% unname() %>% unique() %>% sort()) %>% set_names("Neutrophil degranulation", "Macrophage activation", "Monocyte chemotaxis", "Dendritic cell differentiation", "Granulocyte chemotaxis", "B cell chemotaxis", "Mononuclear cell migration", paste("Leucocytes", c("aggregation", "differentiation", "chemotaxis"))) -> tmp
+
+list_table <- function(x) {
+  ids <- unlist(x) %>% unique() %>% sort()
+  list.map(
+    ids,
+    f(i) ~ list.if(x, i %in% .) %>% as.numeric()
+  ) %>% 
+    list.rbind() %>% 
+    set_colnames(names(x)) %>%
+    as.data.frame() %>%
+    select(colnames(.) %>% sort())
+}
+
+list_common <- function(x) {
+  ids <- unlist(x) %>% unique() %>% sort()
+  res <- list()
+  for (i in ids) {
+    tmp <- list.which(x, i %in% .)
+    if (length(tmp) > 1) {
+      n <- paste(names(x)[tmp] %>% sort(), collapse = ":")
+      if(n %in% names(res)) {
+        res[[n]] <- c(res[[n]], i)
+      } else {
+        res[[n]] <- i
+      }
+    }
+  }
+  res <- res[order(names(res))]
+  len0 <- names(res) %>% str_extract_all(":") %>% sapply(length) %>% set_names(seq(.)) %>% sort()
+  print(len0)
+  len <- names(len0) %>% as.numeric()
+  return(res[len])
+}
+
+tmp0 <- list_table(temp)
+(tmp3 <- list_common(temp))
+lapply(names(tmp3), function(i) str_split(i, ":")) %>% unlist() %>% fct_count() %>% arrange(desc(n))
+
+tmp0 %>%
+    mutate(ID = rownames(.)) %>%
+    gather("key", "value", -ID) %>%
+    mutate(key = str_wrap(key, 20)) %>%
+    mutate(ID = str_wrap(ID, 20)) %>%
+    # mutate(key = factor(key, levels = order_resp)) %>%
+    ggplot(aes(ID, key, fill = as.character(value))) + 
+    geom_tile() +
+    scale_fill_manual(
+        values = c("grey", "#E41A1C"),
+        na.value = "grey",
+        labels = c("Absence", "Presence"),
+        name = ""
+    ) +
+    theme_classic() +
+    theme(
+        axis.title = element_blank(),
+        axis.text.x = element_text(size = 10, color = "grey", angle = 90, hjust = 0.5, vjust = 0.5),
+        axis.ticks = element_blank(),
+        axis.line = element_blank(),
+        axis.text.y = element_text(size = 10, color = "grey"),
+        legend.title = element_text(face = "bold.italic", size = 25),
+        legend.text = element_text(size = 17, color = "grey")
+    ) + theme(legend.position = "none")
+
+
+c(tmp[[1]], tmp[[2]]) %>% set_names(names(.) %>% str_remove_all("(Signaling)|(By)") %>% str_replace_all("Interleukin", "IL") %>% str_replace(" [aA]nd ", "\\/") %>% format_path(100)) %>% get_intersection()
+
+top_genes1 <- lapply(
+  dgeas,
+  function(i) {
+    name_immu %>% lapply(function(x) get_genes_path0(i[-3], x) %>% suppressMessages() %>% unlist() %>% unname() %>% unique() %>% sort()) %>% set_names(name_immu) %>% compact() %>% unlist() %>% unname() %>% unique() %>% sort()
+  # name_immu %>% lapply(function(x) get_genes_path0(i[-3], x) %>% suppressMessages()) %>% compact() %>% list.map(f(x) ~list.map(x, f(y) ~list.map(y, f(z) ~names(z) %>% sort() %>% str_remove_all("(\\(.*)|((ORPHA)|(WP)|(HSA)|(R-)).*") %>% str_trim() %>% to_title())) %>% unlist() %>% unique() %>% sort()) 
+    # list.map(i, f(j) ~ filter(j, Adjusted.P.value <= 0.05) %>% pull(Term)) %>>% list.filter(.i != 3) %>% compact() %>% unlist() %>% unname() %>% sort() %>% str_remove_all("(\\(.*)|((ORPHA)|(WP)|(HSA)|(R-)).*") %>% str_trim() %>% to_title() %>% as.data.frame()
+  }
+) %>% set_names(names(l_de)[c(1, 4:5)])
+
+top_genes1[[4]] <- unlist(de_genes1[[2]]) %>% unname()
+top_genes1[[5]] <- unlist(de_genes1[[3]]) %>% unname()
+names(top_genes1) <- names(l_de)[c(1, 4:5, 2:3)]
+
+list.map(c("(complement)|(C2 )", "(interferon)|(IFN[ABG])", paste0("((interleukins?)|(IL))-?", c(2, 10), "[ -/]")), get_genes_path0(c(enriched[[1]][[1]][-3], enriched[[2]][[1]][-3]),. , detect = "Genes", name = "Term"))
+
+dgea$MSigDB_Hallmark_2020 %>% filter(Adjusted.P.value <= 0.05) %>% arrange(desc(Combined.Score)) %>% rownames_to_column() %>% filter(str_detect(Term, "(Interleukins?)|(IL-?\\d)"))
+
+hsGO_MF <- godata('org.Hs.eg.db', ont = "MF")
+hsGO_BP <- godata('org.Hs.eg.db', ont = "BP")
+
+
+
+tmp <- enriched[[1]][[1]]$Reactome_2022 %>% filter(Adjusted.P.value <= 0.05) %>% pull(Term)
+
+tmp <- enriched[[1]][[1]]$GO_Biological_Process_2021 %>% filter(Adjusted.P.value <= 0.05) %>% pull(Term)
+
+tmp_n <- format_path(tmp, 100)
+
+
+path <- str_replace_all(tmp, ".*(R-HSA-\\d*)", "\\1") %>% 
+  term_similarity_from_Reactome() %>% 
+  set_colnames(tmp_n) %>% set_rownames(tmp_n)
+```
+
 
 # l_enrich <- list.map(de_genes, f(x) ~ enrichr(x, dbs))
 # p <- list.map(l_enrich, f(i, j, k) ~ plot_enrich(i[[5]], n = 15, title = str_replace_all(k, "\\.", "-")))
