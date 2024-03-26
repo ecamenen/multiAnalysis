@@ -706,7 +706,7 @@ list.map(list("IL10", "BCL6", "VEGFA"), f(x) ~ plotCounts(l_de0[[i]], gene = x, 
 
 # Significant genes
 ```{r}
-de_genes0 <- list.map(l_de2, f(i) ~ get_top0(i, n = 1000) %>%
+de_genes0 <- list.map(l_de2, f(i) ~ get_top0(i, fc_threshold, p_threshold, n = 2000) %>%
     rownames() %>%
     str_remove_all("_\\d") %>%
     unique())
@@ -718,7 +718,7 @@ fc_cut <- c(0.5, 1.5)
 de_genes1 <- list.map(l_de2, f(i) ~ {
     list.map(c("Up-regulated", "Down-regulated"), f(j) ~ {
       filter(i, Expression == j) %>%
-        get_top0(1, 0.05, 200) %>%
+        get_top0(fc_threshold, p_threshold, 2000) %>%
             rownames() %>%
             str_remove_all("_\\d") %>%
             unique()
