@@ -83,24 +83,44 @@ axis <- paste0("Dim. ", seq(ncomp))
 ```{r}
 path <- golem::get_golem_wd()
 cwd <- file.path(path, "inst", "extdata")
-raw_counts <- read_tsv(file.path(cwd, "gene_counts.tsv")) %>% column_to_rownames("gene_id")
-batch <- read_tsv(file.path(cwd, "batch_rna.tsv")) %>% mutate(batch = as.factor(batch))
-batch <- data.frame(Sample = colnames(raw_counts)) %>% full_join(batch, by = "Sample") %>% column_to_rownames("Sample") %>% pull(batch)
-clinic <- read_tsv(file.path(cwd, "clinic.tsv")) %>% 
+raw_counts <- read_tsv(file.path(cwd, "gene_counts.tsv")) %>% 
+  column_to_rownames("gene_id")
+batch <- read_tsv(file.path(cwd, "batch_rna.tsv")) %>% 
+  mutate(batch = as.factor(batch))
+batch <- data.frame(Sample = colnames(raw_counts)) %>% 
+  full_join(batch, by = "Sample") %>% 
+  column_to_rownames("Sample") %>% 
+  pull(batch)
+age0 <- interval(
+    (complete_date(clinic$C_2648_3887) %>% dmy()),
+    (complete_date(clinic$C_2643_3802) %>% dmy())
+) / years(1)
+clinic <- clinic %>% #read_tsv(file.path(cwd, "clinic.tsv")) %>% 
   select(c("C_2643_3796", "C_2649_3888", "C_2649_3895", "C_2643_3803", "C_2649_3890")) %>%
-  set_colnames(c("Sample", "Gender", "Ethnicity", "Age", "BMI"))
+  set_colnames(c("Sample", "Gender", "Ethnicity", "Age", "BMI")) %>%
+  mutate(Sample = as.numeric(Sample) %>% as.character()) %>%
+  mutate(`Disease duration` = age0)
 ```
-
+# Data
 ```{r data}
 combat_counts <- as.matrix(raw_counts) %>%
     ComBat_seq(batch) %>%
     as.data.frame()
 norm_rna0 <- round(raw_counts) %>% as.matrix() %>% vst()
 colnames(norm_rna0) <- colnames(norm_rna0) %>% str_remove_all("05PB1")
+norm_rna <- select(facs, !matches("(.*median.*)|(.*iqr.*)"))
+batch <- blocks[[1]]$gender # pull(batch_facs, 1)
+norm_rna1 <- apply(norm_rna, 2, function(x) {x[is.na(x)] <- median(x, na.rm = TRUE); x})
 norm_rna <- round(combat_counts) %>% as.matrix() %>% vst()
 colnames(norm_rna) <- colnames(norm_rna) %>% str_remove_all("05PB1")
-ncomp <- 2
-axis <- paste0("Dim. ", seq(ncomp))
+# norm_rna0 <- apply(facs, 2, function(x) {x[is.na(x)] <- median(x, na.rm = TRUE); x})
+norm_rna %>% as.data.frame() %>% 
+  rownames_to_column("gene_id") %>% 
+  write_tsv(file.path(path, "gene_nobatch_normalized.tsv"))
+
+norm_rna0 <- counts(l_de0[[1]], normalized=TRUE) %>%
+    round() %>%
+    as.matrix()
 ```
 
 ```{r umap}
