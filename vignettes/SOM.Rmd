@@ -22,9 +22,9 @@ type <- "qual"
 set_analysis(block_name = "clinic_still_processed", to_remove = c("1007", "1014"), type = type)
 hc_metric <- "spearman"
 # blocks <- blocks[[1]]
-n_run <- 1000000
-MAX_CLUSTERS <- 6
-hc_method <- 3
+n_run <- 1e4
+MAX_CLUSTERS <- 10
+hc_method <- 1
 cols <- function(a = 1) {
     c(rgb(77 / 250, 175 / 250, 75 / 250, a), rgb(150 / 250, 80 / 250, 150 / 250, a), rgb(1, 0.5, 0, a), rgb(1, 40 / 250, 45 / 250, a), rgb(0 / 250, 120 / 250, 180 / 250, a), rgb(100 / 250, 50 / 250, 75 / 250, a))
 }
@@ -45,30 +45,45 @@ res_scaled[is.na(res_scaled)] <- 0
 ```
 
 # Modelling
-```{r}
+```{r, eval = FALSE}
+n_cores <- parallel::detectCores() - 2
 som_grid <- somgrid(
     xdim = 3,
     ydim = 3,
     toroidal = TRUE,
     topo = "hexagonal"
 )
-model <- "som_model_qual3"
-# assign(
-#   model,
-#   som(
-#     res_scaled_na,
-#     grid = som_grid,
-#     rlen = n_run,
-#     maxNA.fraction = 1,
-#     dist.fcts = "tanimoto"
-#   ),
-#   envir = .GlobalEnv
-# )
-path <- file.path(golem::get_golem_wd())
-file_path <- file.path(path, "data", paste0(model, ".RData"))
-# save(som_model_qual3, file = file_path)
-load(file_path)
-som_model <- get(model)
+model <- "som_model2"
+assign(
+  model,
+  som(
+    res_scaled_na,
+    grid = som_grid,
+    rlen = n_run,
+    maxNA.fraction = 100,
+    dist.fcts = "tanimoto"
+  ),
+  envir = .GlobalEnv
+)
+```
+
+
+```{r}
+som_model <- xyf(
+    as.matrix(res_scaled_na),
+    classvec2classmat(Y),
+    grid = som_grid,
+    rlen = n_run,
+    maxNA.fraction = 100,
+    # dist.fcts = "tanimoto",
+    cores = n_cores
+  )
+beepr::beep()
+# path <- file.path(golem::get_golem_wd())
+# file_path <- file.path(path, "data", paste0(model, ".RData"))
+# save(som_model_qual4, file = file_path)
+# load(file_path)
+# som_model <- get(model)
 # plot(som_model, type = "changes")
 
 som_inds <- som_model$unit.classif %>% set_names(rownames(blocks))
