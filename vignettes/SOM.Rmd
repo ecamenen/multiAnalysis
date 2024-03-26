@@ -88,10 +88,11 @@ beepr::beep()
 
 som_inds <- som_model$unit.classif %>% set_names(rownames(blocks))
 print(sapply(seq(max(som_inds)), function(x) names(som_inds[som_inds == x])))
-som_inds %>%
+(df <- som_inds %>%
     as.factor() %>%
     fct_infreq() %>%
     fct_count()
+)
 ```
 
 # Clustering
@@ -127,8 +128,17 @@ lapply(
 # Variable contribution
 100 * getCtrVar(k, cls[[k - 1]], som_codes)
 ctr <- getDiscriminantVariables(k, cls[[k - 1]], som_codes, ncol(som_codes))
-plotHistogram(df = ctr)
-
+GimmeMyPlot::plot_bar(
+    select(ctr, 1),
+    n_max = 10,
+    digits = 2,
+    threshold = 0,
+    abs = TRUE,
+    colour = c("#99000D", "gray"),
+    title = ".",
+    label_x = "name",
+    width_text = 25
+)
 
 # res0 <- pvclust(
 #   t(som_codes),
@@ -140,19 +150,20 @@ plotHistogram(df = ctr)
 # ) %>% suppressWarnings()
 # plot_dendrogram(res0, k = k, color = colors_k)
 som_clusters <- cls[[k - 1]]
+# som_clusters <- append(som_clusters, 3, after = 4)
 
-# som_clusters <- read.csv2(file.path(path, "clusters0.temp.tsv"))$cl0
-ind_clusters <- som_clusters[som_inds]
+# som_clusters <- read.csv2(file.path(path_out, "clusters0.temp.tsv"))$cl0
+ind_clusters <- som_clusters[som_inds] %>% set_names(names(som_inds))
 ind_clusters %>%
     as.factor() %>%
     fct_infreq() %>%
     fct_count()
 
 # Chi-test
-if (type == "qual") {
-  chi2(som_clusters, som_codes)
-  chi2(ind_clusters, blocks)
-}
+# if (type == "qual") {
+#   chi2(som_clusters, som_codes)
+#   chi2(ind_clusters, blocks)
+# }
 ```
 
 ```{r, eval = FALSE}
@@ -163,7 +174,7 @@ lapply(seq(k), function(i) {
         names() %>%
         fct_infreq() %>%
         fct_count() %>%
-        filter(n > 2) %>%
+        filter(n > 0) %>%
         data.frame(., i) %>%
         # set_colnames(rep("", 2))
         set_colnames(c("Disease", "N/cluster", "Cluster"))
@@ -192,6 +203,12 @@ lapply(
         ncol = 3
     )
 
+(centers_k <- getDistPerVariable0(som_codes, som_clusters))
+centers <- lapply(cls, function(i) getDistPerVariable0(som_codes, i))
+getClassif(2, MAX_CLUSTERS - 1, som_codes, res_dist, centers = centers)
+# centers <- lapply(cls, function(i) calculate_medoid(som_codes, res_scaled, i))
+# With the raw data
+getDistPerVariable0(blocks, som_inds) %>% getDistPerVariable0(som_clusters)
 ```
 
 # Heatmap
