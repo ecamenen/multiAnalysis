@@ -444,7 +444,7 @@ get_top <- function(res, fc_threshold = 1, p_threshold = 0.05, n = 1000) {
         head(n)
 }
 
-get_top0 <- function(res, fc_threshold = 0.5, p_threshold = 0.05, n = 1000, rank = FALSE) {
+get_top0 <- function(res, fc_threshold = 0.5, p_threshold = 0.05, n = 1000, rank = FALSE, var = "pfc", f = desc) {
     temp <- res %>%
       mutate(
             rank_p = rank(desc(log10p)),
@@ -452,7 +452,7 @@ get_top0 <- function(res, fc_threshold = 0.5, p_threshold = 0.05, n = 1000, rank
             pfc = log10p * log2fc,
             rank = rank(rank_p + rank_fc)
         ) %>%
-        dplyr::arrange(desc(abs(pfc))) %>%
+        dplyr::arrange(f(abs(!!sym(var)))) %>%
         filter(abs(log2FoldChange) >= fc_threshold & padj <= p_threshold) %>%
         head(n)
     if (!rank) {
@@ -582,6 +582,17 @@ chi_plot <- function(
         color = "gray50"
       )
     )
+
+get_intersection0 <- function(x) {
+  res <- gplots::venn(x)
+  attributes(res)$intersections
+}
+
+get_intersection <- function(x, n = 1) {
+  intersections <- get_intersection0(x)
+  regex <- paste0("^([^:]*:){", n, ",}[^:]*$")
+  intersections[grepl(regex, names(intersections))]
+}
 }
 
 cnetplot0 <- function(
@@ -691,8 +702,8 @@ get_kegg_path <- function(x, query) {
 
   df <- names(res) %>% str_replace_all(":", " / ") %>% #str_wrap(30) %>%
     data.frame(id = ., col = get_colors()[-c(3, 6:7)][seq_along(.)])
-  ggplot(df, aes(x = 1, y = id, label = str_wrap(id, 40), color = col)) +
-    geom_text(size = 10, hjust = 0) +
+  ggplot(df, aes(x = 1, y = id, label = str_wrap(id, 1000), color = col)) +
+    geom_text(size = 8, hjust = 0.5) +
     scale_color_manual(values = df$col) +
     theme_void() +
     theme(legend.position = "none")
@@ -707,30 +718,71 @@ get_genes_path <- function(x, query, name = "Genes", detect = "Term", cutoff = 0
         f(j) ~ {
           as.data.frame(j) %>%
             filter(Adjusted.P.value <= cutoff) -> temp
-          if(nrow(temp) == 0) 
+          if(nrow(temp) == 0)
             return(NULL)
           if (detect == "Genes") {
             temp <- lapply(
-              seq(nrow(temp)), 
+              seq(nrow(temp)),
               function(x) {
                 slice(temp, x) %>%
                   pull(detect) %>%
-                  str_split(";") %>% 
+                  str_split(";") %>%
                   unlist() %>%
                   str_detect(paste0("^", i, "$") %>% str_remove_all("\\.\\.\\.$")) %>%
                   any()
               }
-              ) %>% 
+              ) %>%
               unlist() %>%
               filter(temp, .)
           } else {
-            temp <- filter(temp, str_detect(!!sym(detect), paste0("^", i) %>% str_remove_all("\\.\\.\\.$")))
+            temp <- filter(temp, str_detect(!!sym(detect), str_remove_all(i, "\\.\\.\\.$")))
           }
             pull(temp, name)  %>%
             str_split(";") %>% unlist()
         }) %>% unlist() %>% unique() %>% sort() %>% unname()
     }
   ) %>% compact()
+}
+
+get_genes_path0 <- function(x, query, name = "Genes", detect = "Term", cutoff = 0.05, p_adjust = "Adjusted.P.value", split_pattern = ";", path = "Term") {
+  list.map(
+    query,
+    f(i) ~ {
+      list.map(
+        x,
+        f(j) ~ {
+          as.data.frame(j) %>%
+            filter(!!sym(p_adjust) <= cutoff) -> temp
+          if(nrow(temp) == 0)
+            return(NULL)
+          if (detect == "Genes") {
+            temp <- lapply(
+              seq(nrow(temp)),
+              function(k) {
+                slice(temp, k) %>%
+                  pull(detect) %>%
+                  str_split(";") %>%
+                  unlist() %>%
+                  str_detect(grepl(str_remove_all(i, "\\.\\.\\.$"), !!sym(detect), ignore.case = TRUE)) %>%
+                  any()
+              }
+            ) %>%
+              unlist() %>%
+              filter(temp, .)
+          } else {
+            temp <- filter(temp, grepl(str_remove_all(i, "\\.\\.\\.$"), !!sym(detect), ignore.case = TRUE))
+          }
+          pull(temp, name)  %>%
+            str_split(split_pattern) %>% lapply(sort) %>% set_names(pull(temp, path)) #%>% unlist()
+        }) %>% compact() #%>% unlist() %>% unique() %>% sort() %>% unname()
+    }
+  ) %>% compact()
+}
+
+format_path0 <- function(x) {
+  pluck(x, 1) %>%
+    Reduce(function(i, j) c(i, j), .) %>%
+    set_names(names(.) %>% str_remove_all("(\\(.*)|((ORPHA)|(WP)|(HSA)|(R-)).*") %>% str_trim() %>% to_title())
 }
 
 tree_plot <- function(x, ratio = ratio, wrap = 20, n = 50) {
