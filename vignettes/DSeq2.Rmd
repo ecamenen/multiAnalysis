@@ -838,10 +838,92 @@ counts_matrix %>% filter(rownames(.) %in% n_genes) %>% pull(ensembl_gene_id)
 get_genes_path(enriched[[1]][[1]][-3], n_genes, detect = "Genes", name = "Term", cutoff = 1)
 ```
 
+# Atlas of Inflammation Resolution
+```{r}
+library("clusterProfiler")
+
+atlas_inflammation <- read.delim(file.path(path, "AIR_2023.txt")) %>%
+  filter(SYMBOL != "") %>%
+  select(-Description, -Name) %>%
+  unique()
+TERM2GENE <- select(atlas_inflammation, Map.name, SYMBOL)
+
+enrich_air <- list.map(
+  c("Up-regulated", "Down-regulated"),
+  f(x) ~ {
+    list.map(
+      compact(de_genes1),
+      f(i) ~ {
+        enricher(
+          i[[x]],
+          TERM2GENE = TERM2GENE,
+          pvalueCutoff = 0.05,
+          universe = rownames(counts_matrix)
+        )
+      }) %>% compact() %>% purrr::keep(function(x) nrow(as.data.frame(x)) > 0)
+  }) %>% compact()
+
+enrich_air0 <- list.map(
+      compact(de_genes0),
+      f(i) ~ {
+        enricher(
+          unlist(i),
+          TERM2GENE = TERM2GENE,
+          pvalueCutoff = 0.05,
+          universe = rownames(counts_matrix)
+        )
+      }) %>% compact() %>% purrr::keep(function(x) nrow(as.data.frame(x)) > 0)
+
+plot_enrich(
+    list(enrich_air[[1]][[1]], enrich_air[[2]][[1]]) %>% lapply(as.data.frame) %>% list.rbind(),
+    type = "kegg",
+    n = 15,
+    title  = "Atlas of Inflammation\nResolution",
+    wrap = 35
+) + theme(plot.title = element_text(hjust = 0.75))
+
+air_genes0 <-  list.map(
+   c("Up-regulated", "Down-regulated"),
+   f(x) ~ {
+res <- as.data.frame(enrich_air[[x]]$`Control vs Disease`)
+if(nrow(res) > 0)
+    res %>% pull(geneID) %>% lapply(function(x) str_split(x, "/") %>% pluck(1)) %>% set_names(as.data.frame(enrich_air[[x]]$`Control vs Disease`) %>% pull(Description))
+})
+air_genes0 <- {
+  res <- as.data.frame(enrich_air0$`Control vs Disease`)
+      if(nrow(res) > 0)
+  res %>% pull(geneID) %>% lapply(function(x) str_split(x, "/") %>% pluck(1)) %>% set_names(as.data.frame(enrich_air0$`Control vs Disease`) %>% pull(Description))
+}
+
+air_genes <- air_genes0 %>% unlist() %>% unique() %>% sort()
+# as.data.frame(enrich_air0$`Control vs Disease`) %>% pull(geneID) %>% lapply(function(x) str_split(x, "/") %>% pluck(1)) %>% set_names(as.data.frame(enrich_air0$`Control vs Disease`) %>% pull(Description))
+# air_genes0 %>%
+#   list.flatten() %>%
+#   set_names(names(.) %>% str_remove_all(".*\\.")) %>%
+#   plot_venn(cex = 1.5)
+
+immu_genes_univ <- pull(TERM2GENE, 2) %>% unique()
+immu_genes0 <- intersect(unlist(de_genes1$`Control vs Disease`), immu_genes_univ) %>% unique() %>% sort()
+# c(immu_genes0, top_genes1) %>% unique() %>% sort()
 ```
 
 # ORA
 ```{r}
+enrich_kegg <- list.map(
+  c("Up-regulated", "Down-regulated"),
+  f(x) ~ {
+    list.map(
+      compact(de_genes1),
+      f(i) ~ {
+        res <- bitr(i[[x]], fromType = "ALIAS", toType = "ENTREZID", OrgDb = get(organism))
+    if (length(res) > 0) {
+        pull(res, 2) %>%
+            head(250) %>%
+            enrichKEGG(organism = "hsa")
+    }
+    }) %>% compact() %>% purrr::keep(function(x) nrow(as.data.frame(x)) > 0)
+}) %>% compact()
+
 enriched <- list.map(
   c("Up-regulated", "Down-regulated"),
   f(x) ~ {
@@ -857,30 +939,71 @@ enriched <- list.map(
   })
 }) %>% compact()
 
+enrich_kegg0 <- list.map(
+      list(node$id),
+      f(i) ~ {
+        res <- bitr(i, fromType = "ALIAS", toType = "ENTREZID", OrgDb = get(organism))
+    if (length(res) > 0) {
+        pull(res, 2) %>%
+            head(250) %>%
+            enrichKEGG(organism = "hsa")
+    }
+    }) %>% 
+  compact() %>% 
+  purrr::keep(function(x) nrow(as.data.frame(x)) > 0)
+
+enriched0 <-  list.map(
+    list(node$id), 
+    f(j) ~ {
+    res <- j
+    if (length(res) > 0) {
+        unlist(res) %>%
+            head(250) %>%
+            enrichr(dbs)
+    }
+}) %>% compact()
+```
+
+
+```{r}
 # enriched <- list.map(de_genes, f(i) ~ enrichr(i, dbs))
 list.map(
   enriched, 
   f(a, b, c) ~ {
     list.map(
-      compact(a),
+      a,
       f(x, y, z) ~ {
     #   tiff(
-    #     file.path(path_img, paste0("enrichr_", z, "_", c, ".tiff")),
+    #     file.path(path_img, "batch5", paste0("enrichr_", z, "_", c, ".tiff")),
     #     units = "px",
     #     width = 8000,
     #     height = 4000,
     #     res = 300
     # )
-    keep(x, function(i) nrow(i) > 0) %>%
       list.map(
-        f(i, j, k) ~ {
-          plot_enrich(
-            i,
-            n = 15,
-            title = str_replace_all(k, "_", " "),
-            wrap = 35
+        x,
+        f(i, j, k) ~ { 
+          if (j != 3) {
+            if(!is.null(i) && nrow(i) > 0)
+              plot_enrich(
+                i,
+                n = 15,
+                title = str_replace_all(k, "_", " "),
+                wrap = 35
+              )
+          }
+          else {
+            i <- enrich_kegg[[c]][[z]]
+            if (!is.null(i))
+            plot_enrich(
+              i,
+              type = "kegg",
+              n = 15,
+              title  = "KEGG",
+              wrap = 35
             )
           }
+        }
         ) %>%
         plot_grid(
             plotlist = .,
@@ -889,11 +1012,12 @@ list.map(
             align = "hv"
         ) %>%
           plot_grid(
-            ggdraw() + draw_label(
-              paste0(z, " (", c,")"),
-              color = "#2F5496",
-              size = 50,
-              fontface = "bold.italic"
+            ggdraw() + 
+              draw_label(
+                paste0(z, " (", c,")"),
+                color = "#2F5496",
+                size = 50,
+                fontface = "bold.italic"
               ),
             .,
             ncol = 1,
@@ -903,22 +1027,55 @@ list.map(
   })
 }) -> p
 
-# for (i in names(p)) {
-#   for (j in names(p[[i]])) {
-    # i <- names(p)[1]
-    # j <- names(p[[1]])[1]
-    # png(
-    #     file.path(path_img, paste0("enrichr_", j, "_", i, ".tiff")),
-    #     units = "px",
-    #     width = 8000,
-    #     height = 4000,
-    #     res = 300
-    # )
-    # p[[i]][[j]]
-    # dev.off()
-    # save_tiff(p[[i]][[j]], file.path(path_img, paste0("enrichr_", j, "_", i, ".tiff")), 8000, 4000)
-#   }
-# }
+list.map(
+  enriched0, 
+      f(x, y, z) ~ {
+      list.map(
+        x,
+        f(i, j, k) ~ { 
+          if (j != 3) {
+            if(!is.null(i) && nrow(i) > 0)
+              plot_enrich(
+                  i,
+                  n = 15,
+                  title = str_replace_all(k, "_", " "),
+                  wrap = 35
+                )
+          }
+          else {
+            i <- enrich_kegg0[[z]]
+            if (!is.null(i))
+              plot_enrich(
+                i,
+                type = "kegg",
+                n = 15,
+                title  = "KEGG",
+                wrap = 35
+              )
+          }
+        }
+        ) %>%
+        plot_grid(
+            plotlist = .,
+            nrow = 2,
+            ncol = 3,
+            align = "hv"
+        ) %>%
+          plot_grid(
+            ggdraw() + 
+              draw_label(
+                z,
+                color = "#2F5496",
+                size = 50,
+                fontface = "bold.italic"
+              ),
+            .,
+            ncol = 1,
+            rel_heights = c(0.1, 1)
+          )
+}) -> pp
+```
+
 
 # l_enrich <- list.map(de_genes, f(x) ~ enrichr(x, dbs))
 # p <- list.map(l_enrich, f(i, j, k) ~ plot_enrich(i[[5]], n = 15, title = str_replace_all(k, "\\.", "-")))
