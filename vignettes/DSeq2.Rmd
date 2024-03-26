@@ -1729,7 +1729,7 @@ select(blocks_, -Treatment) %>% ggplot(data = ., aes(x = 1, y = as.character(var
 # GSEA
 ```{r}
 # ClusterProfiler
-gse <- list.map(
+gse_go <- list.map(
   de_genes_ranked, 
   f(i) ~ {
     gseGO(
@@ -1742,6 +1742,20 @@ gse <- list.map(
     }) %>%
   purrr::keep(function(x) nrow(as.data.frame(x)) > 0)
 # dotplot(gse, showCategory = 10)
+
+```
+
+```{r, eval = FALSE}
+ego <- enrichGO(
+  # gene = pull(de_genes2[[1]][[1]], ensembl_ids),
+  de_genes2[[1]][[1]],
+  ont = "ALL",
+  keyType = "ENSEMBL",
+  universe = ensembl_ids,
+  OrgDb = get(organism),
+  qvalueCutoff = 0.05
+) %>%
+  setReadable('org.Hs.eg.db', 'ENSEMBL')
 
 # list.map(gse, f(i) ~ data.frame(i)) %>%
 keep(gse, function(i) nrow(i) > 0) %>%
@@ -1838,19 +1852,42 @@ cnetplot0(ck_go)
 ```
 
 # Kegg pathways
-```{r, eval = FALSE}
+```{r}
 # Convert gene list into KEGG IDs
-kegg_genes <- list.map(de_genes_ranked, f(i) ~ {
+entrez_genes <- list.map(de_genes_ranked, f(i) ~ {
     bitr(names(i), fromType = "ENSEMBL", toType = "ENTREZID", OrgDb = get(organism)) %>% left_join(data.frame(ENSEMBL = names(i), log2FoldChange = i)) -> tmp
     tmp$log2FoldChange %>%
         set_names(pull(tmp, ENTREZID)) %>%
         sort(decreasing = TRUE)
 })
-sapply(kegg_genes, length)
+sapply(entrez_genes, length)
 
+univ <- ensembl_ids %>% bitr(fromType = "ENSEMBL", toType = "ENTREZID", OrgDb = get(organism)) %>% pull("ENTREZID")
+kegg_genes1 <- list.map(
+  de_genes2,
+  f(i) ~ {
+    list.map(
+      i,
+      ~ bitr(., fromType = "ENSEMBL", toType = "ENTREZID", OrgDb = get(organism)) %>% 
+        pull("ENTREZID")
+    )
+    
+}
+)
+lapply(kegg_genes1, function(x) sapply(x, length))
+
+data("gene_query_entrez")
+TERM2GENE2 <- inner_join(rename(TERM2GENE, hgnc_symbol = SYMBOL), gene_query_entrez) %>% select(-hgnc_symbol)
+
+gsea_air <- GSEA(entrez_genes[[1]], TERM2GENE = TERM2GENE2) %>%
+  setReadable(OrgDb = get(organism), keyType = "ENTREZID")
+```
+
+
+```{r, eval = FALSE}
 # Compare GSEA with KEGG
 ck_kegg <- lapply(
-  kegg_genes, 
+  entrez_genes, 
   function(x) data.frame(Entrez = names(x), logFC = x)
   ) %>%
   list.rbind() %>%
@@ -1865,10 +1902,12 @@ ck_kegg <- lapply(
 
 plot_enrich_gsea(ck_kegg)
 cnetplot0(ck_kegg)
+```
 
+```{r}
 # Perform GSEA with KEGG
 gsea_kegg <- list.map(
-  kegg_genes, 
+  entrez_genes, 
   f(i) ~ {
     gseKEGG(
     geneList = i,
@@ -1879,7 +1918,9 @@ gsea_kegg <- list.map(
   }
 ) %>% 
   purrr::keep(function(x) nrow(as.data.frame(x)) > 0)
+```
 
+```{r, eval = FALSE}
 # Enrichment plot
 # list.map(gsea_kegg, f(i) ~ data.frame(i)) %>%
     # keep(function(i) nrow(i) > 0) %>%
@@ -1897,7 +1938,7 @@ list.map(
     gsea_kegg,
     f(i, j, k) ~ {
         # setReadable(i, OrgDb = get(organism), keyType = "ENTREZID") %>%
-        heatplot0(i, foldChange = kegg_genes[[k]]) + 
+        heatplot0(i, foldChange = entrez_genes[[k]]) + 
         labs(title = k) + 
         theme(legend.position = "none")
     }
@@ -1915,22 +1956,9 @@ get_enrich_genes(gsea_kegg) %>% plot_venn1(cex = 1.5, n = 20)
 get_enrich_genes(gsea_kegg) %>% get_intersection0()
 
 # c("CD3D", "CD3E", "CD3G", "CD8A", "LCK") %>% bitr(fromType = "ALIAS", toType = c("ENTREZID"), OrgDb = get(organism)) -> tmp
+```
 
-enrich_kegg <- list.map(
-  c("Up-regulated", "Down-regulated"),
-  f(x) ~ {
-    list.map(
-      compact(de_genes1),
-      f(i) ~ {
-        res <- bitr(i[[x]], fromType = "ALIAS", toType = "ENTREZID", OrgDb = get(organism))
-    if (length(res) > 0) {
-        pull(res, 2) %>%
-            head(250) %>%
-            enrichKEGG(organism = "hsa")
-    }
-    }) %>% compact() %>% purrr::keep(function(x) nrow(as.data.frame(x)) > 0)
-}) %>% compact()
-
+```{r, eval = FALSE}
 list.map(
   enrich_kegg,
   f(i, j, k) ~ {
@@ -1983,28 +2011,26 @@ get_intersection0(genes[-c(2:3)])
 
 as.tibble(enrich_kegg[[2]][[4]]) %>%  filter(str_detect(Description,  "Human T")) %>% pull(geneID) %>% str_split("/") %>% pluck(1) %>% bitr(fromType = "ENTREZID", toType = "ALIAS", OrgDb = get(organism)) %>% pull(2)
 
-pathview(gene.data = kegg_genes[[1]], species="hsa", pathway.id="hsa04060", low = list(gene = "#377EB8", cpd = "blue"), mid = list(gene = "gray", cpd = "gray"), high = list(gene = "#E41A1C", cpd =
+library("pathview")
+pathview(gene.data = entrez_genes[[1]], species="hsa", pathway.id="hsa04060", low = list(gene = "#377EB8", cpd = "blue"), mid = list(gene = "gray", cpd = "gray"), high = list(gene = "#E41A1C", cpd =
 "yellow"))
 ```
 
 ```{r}
+library("ReactomePA")
 gse_wiki <- lapply(
-  kegg_genes,
+  entrez_genes,
   function(x) {
     gseWP(x, organism = "Homo sapiens") %>%
   setReadable(OrgDb = get(organism), keyType = "ENTREZID")
   }
 )
-plot_enrich(gse_wiki , n = 25, wrap = 50, type = "gsea", title = "WikiPathway")
+# plot_enrich(gse_wiki , n = 25, wrap = 50, type = "gsea", title = "WikiPathway")
 
-# gsePathway(kegg_genes[[1]], 
+# gsePathway(entrez_genes[[1]], 
 #                 pvalueCutoff = 0.05,
 #                 pAdjustMethod = "BH", 
 #                 verbose = FALSE)
-
-library(DOSE)
-gse_do <- lapply(kegg_genes, function(x) gseDO(x, verbose = FALSE))
-gse_dgn <- lapply(kegg_genes, function(x) gseDGN(x, verbose = FALSE))
 
 # library(AnnotationHub)
 # library(MeSHDbi)
@@ -2013,46 +2039,93 @@ gse_dgn <- lapply(kegg_genes, function(x) gseDGN(x, verbose = FALSE))
 # file_hsa <- hsa[[1]]
 # db_mesh <- MeSHDbi::MeSHDb(file_hsa)
 db_mesh <- MeSHDbi::MeSHDb("C:\\Users\\etien\\AppData\\Local/R/cache/R/AnnotationHub/70c065c527f7_98354")
-library(meshes)
-gse_mesh <- lapply(kegg_genes, function(x) gseMeSH(x, MeSHDb = db_mesh, database = 'gene2pubmed', category = "G"))
+library("meshes")
+gse_mesh <- lapply(entrez_genes, function(x) gseMeSH(x, MeSHDb = db_mesh, database = 'gene2pubmed', category = "G"))
 ```
 
 ```{r, eval = FALSE}
-library(msigdbr)
+library("DOSE")
+gse_do <- lapply(entrez_genes, function(x) gseDO(x, verbose = FALSE))
+gse_dgn <- lapply(entrez_genes, function(x) gseDGN(x, verbose = FALSE))
 
-db_msig <- msigdbr(species = "Homo sapiens", category = "C7")
+```
+
+```{r, eval = FALSE}
+# Wiki Pathway
+ego2 <- enrichWP(
+    gene = kegg_genes1[[1]][[1]],
+    universe = univ,
+    organism = "Homo sapiens",
+    qvalueCutoff = 0.05
+)
+# pairwise_termsim(ego2) %>% treeplot(showCategory = 200)
+
+#  Reactome
+univ <- ensembl_ids %>% bitr(fromType = "ENSEMBL", toType = "ENTREZID", OrgDb = get(organism)) %>% pull("ENTREZID")
+ego3 <- enrichPathway(
+    gene = kegg_genes1[[1]][[1]],
+    universe = univ,
+    organism = "human",
+    qvalueCutoff = 0.05,    ,
+    readable = TRUE
+)
+pairwise_termsim(ego3) %>% treeplot(showCategory = 200)
+cnetplot(ego3, color.params = list(foldChange=entrez_genes[[1]], category  = "grey"), cex.params = list(category_label = 1.5), showCategory = 1, node_label = "gene") + scale_color_gradientn(name="Log2(FC)", colours  = brewer.pal(9, "Reds") ) + guides(size = "none")
+
+# MESH
+ego4 <- enrichMeSH(
+    gene = kegg_genes1[[1]][[1]],
+    MeSHDb = db_mesh,
+    database = 'gene2pubmed', 
+    category = "G",
+    universe = univ,
+    qvalueCutoff = 0.05
+)
+```
+
+```{r}
+library("msigdbr")
+
+db_msig <- msigdbr(species = "Homo sapiens", category = "H")
 msig_gene <- select(db_msig, gs_name, entrez_gene)
 msig_description <- select(db_msig, gs_name, gs_description)
 gse_msig <- lapply(
-  kegg_genes, 
+  entrez_genes, 
   function(x) {
     GSEA(x, TERM2GENE = msig_gene, TERM2NAME = msig_description) %>%
   setReadable(OrgDb = get(organism), keyType = "ENTREZID")
   }
 )
 
-db_msig2 <- msigdbr(species = "Homo sapiens")
-msig_gene2 <- select(db_msig2, gs_name, entrez_gene)
-msig_description2 <- select(db_msig2, gs_name, gs_description)
-gse_msig2 <- lapply(
-  kegg_genes, 
-  function(x) {
-    GSEA(x, TERM2GENE = msig_gene2, TERM2NAME = msig_description2) %>%
-  setReadable(OrgDb = get(organism), keyType = "ENTREZID")
-  }
-)
+# db_msig2 <- msigdbr(species = "Homo sapiens", category = "C2")
+# msig_gene2 <- select(db_msig2, gs_name, entrez_gene)
+# msig_description2 <- select(db_msig2, gs_name, gs_description)
+# gse_msig2 <- lapply(
+#   entrez_genes, 
+#   function(x) {
+#     GSEA(x, TERM2GENE = msig_gene2, TERM2NAME = msig_description2) %>%
+#   setReadable(OrgDb = get(organism), keyType = "ENTREZID")
+#   }
+# )
+
+# msigdbr(species = "Homo sapiens", category = "C2") %>% pull(gs_description) %>% unique() %>% discard(function(x) str_detect(x, "(^Genes )|(Up\\-)|(Down\\-)|(Cluster)|(Amplification)"))
 ```
 
-```{r}
-gse <- list(gse_go, gsea_kegg, gse_wiki, gse_do, gse_dgn, gse_mesh)
+# Plot GSEA
+```{r, eval = FALSE}
+# gse <- list(gse_go, gsea_kegg, gse_wiki, gse_do, gse_dgn, gse_mesh, gse_msig)#, gse_msig2)
+gse <- list(gse_go, gsea_kegg, gse_wiki, gse_mesh, gse_msig)
 # use_data(gse, overwrite = TRUE)
-titles <- c("GO", "KEGG", "WikiPathway", "Disease Ontology", "Disease Gene Network", "MeSH", "MSigDb")
+# titles <- c("GO", "KEGG", "WikiPathway", "Disease Ontology", "Disease Gene Network", "MeSH", "MSigDb")
+titles <- c("GO", "KEGG", "WikiPathway", "MeSH", "MSigDb (H)")
+paths2 <- lapply(gse, function(x) x[[1]] %>% as.data.frame() %>% filter(p.adjust <= 0.05) %>% pull(Description)) %>% unlist() %>% sort()
+lapply(name_immu, function(x) paths2 %>% .[str_detect(., x)]) %>% set_names(name_immu) %>% compact()
 p3 <- lapply(
   names(l_de),
   function (x) {
     print(x)
     lapply(
-      seq(gse),
+      seq_along(gse),
       function(i) {
         print(i)
         if (!is.null(gse[[i]][[x]]) && nrow(gse[[i]][[x]]) > 0) {
