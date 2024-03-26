@@ -246,25 +246,62 @@ list.map(
 select(metadata, c(2:3, Group)) %>% mutate(Group = ifelse(Group == 0, "HV", "SD")) %>% plot_dimred(axis, eig = eig, legend = "Group", colour = get_colors()[c(5, 3)]) + theme(legend.position = "none")
 ```
 
+# PCA
 ```{r pca}
-res_pca <- PCA(t(norm_rna), scale.unit = FALSE, ncp = ncomp, graph = FALSE)
-coord <- trans_coord(res_pca$ind$coord)
+res_pca <- PCA(norm_rna1, scale.unit = FALSE, ncp = ncomp, graph = FALSE)
+coord <- trans_coord(res_pca$ind$coord, add = batch)
 res_pca$eig[, "percentage of variance"] %>%
   plot_dimred(coord, axis, eig = .)
 outs <- lapply(seq(ncomp), function(x) get_outliers(res$layout[, x], method = "iqr", replace = FALSE))
 lapply(seq(ncomp), function(x) get_outliers(res_pca$ind$coord[, x], method = "mad", replace = FALSE, c = 6))
 ```
 
-```{r mds}
-hc_metric <- "pearson"
-res_dist <- get_dist(t(norm_rna), stand = FALSE, method = hc_metric)
-
-mds <- cmdscale(res_dist, k = ncomp, eig = TRUE)
-mds$points[, 1] <- mds$points[, 1] * -1
-(mds$eig / sum(mds$eig[mds$eig > 0]) * 100) %>%
-  plot_dimred(trans_coord(mds$points), axis, eig = .)
+# RGCCA
+```{r}
+res_rgcca <- rgcca(norm_rna, ncomp = 5, method = "pca", scale = FALSE, scale_block = FALSE)
+coord <- trans_coord(res_rgcca$Y[[1]][, seq(ncomp)], add = batch)
+(res_rgcca$AVE$AVE_outer * 100) %>%
+  plot_dimred(coord, axis, eig = .)
+(coord[, 1] - min(coord[, 1])) %>% cbind(pull(batch, 1)) %>% chisq_test(workspace = 1e8)
+rgcca_weights <- res_rgcca$a[[1]]
+dim <- 1
+title <- (res_rgcca$AVE$AVE_outer * 100) %>% 
+  round(0) %>%
+  paste0("%") %>%
+  .[dim]
+# c("#99000D", "gray")
+abs(rgcca_weights[, dim] * 100) %>% 
+  plot_bar(
+    n_max = 15,
+    cex = 0.7,
+    colour =  c("#99000D", "gray"), # ifelse(rgcca_weights[, dim] < 0, "darkred", "forestgreen"),
+    width_text = 40,
+    title = paste0("Dim. ", dim, ": ", title)
+)
 ```
 
+# MDS
+```{r mds}
+hc_metric <- "spearman"
+norm_rna2 <- t(norm_rna0) %>% remove_constant() %>% scale()
+res_dist <- norm_rna2 %>% get_dist(stand = FALSE, method = hc_metric)
+
+mds <- cmdscale(res_dist, k = ncomp, eig = TRUE, x.ret = TRUE)
+# mds <- cmdscale(1 - rf$proximity, k = ncomp, eig = TRUE)
+mds$points[, 1] <- mds$points[, 1] * -1
+coord <- trans_coord(mds$points, add = batch)
+eig <- (mds$eig / sum(mds$eig) * 100) #[mds$eig > 0]
+  plot_dimred(coord, axis, eig = eig, colour = get_colors()[c(3, 5)]) + 
+  theme(legend.position = "none")
+lapply(
+  unique(batch), 
+  function(x) {
+    filter(coord, batch == x) %>% arrange(`Dim. 1`)
+    }
+  )
+```
+
+# SOM
 ```{r som}
 som_grid <- somgrid(
     xdim = 3,
@@ -273,14 +310,16 @@ som_grid <- somgrid(
     topo = "hexagonal"
 )
 res_som <- som(
-    t(norm_rna0),
+    facs %>% as.matrix(),
     grid = som_grid,
-    rlen = 1000
+    rlen = 10000,
+    normalizeDataLayers = FALSE,
+    maxNA.fraction = 101
 )
 
-col_grp <- function(x = som_clusters, a = 1) {
+col_grp <- function(x = som_clusters, a = 1, color = get_colors()) {
     x <- as.factor(x)
-    levels(x) <- get_colors()[seq(levels(x))]
+    levels(x) <- color[seq(levels(x))]
     return(as.vector(x))
 }
 
@@ -288,7 +327,7 @@ plot(
     res_som,
     type = "mapping",
     cex = 0.8,
-    labels = colnames(norm_rna),
+    # labels = colnames(facs),
     # cex = 3
     # labels = rep(".", ncol(norm_rna))
     col = col_grp(x = batch),
@@ -296,13 +335,15 @@ plot(
     shape = "straight",
     border = "gray50"
 )
+add.cluster.boundaries(som_model, som_clusters, lwd = 5, col = "white")
 ```
 
+# HAC
 ```{r ward}
 res_clus <- hclust(res_dist, method = "ward.D2")
 df <- as.matrix(res_dist)
 annot <- data.frame(Batch = batch)
-rownames(annot) <- rownames(t(norm_rna))
+rownames(annot) <- rownames(facs)
 row_col <- get_colors()[c(1, 3:5, 2)] %>% set_names(unique(batch)) %>% list(Batch = .)
 pheatmap(
     df,
@@ -322,6 +363,7 @@ pheatmap(
 )
 ```
 
+# NHC
 ```{r pam}
 MAX_CLUSTERS <- 10
 res_nhc <- getClassif(1, MAX_CLUSTERS, t(norm_rna), res_dist)
