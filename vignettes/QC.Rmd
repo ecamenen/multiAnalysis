@@ -371,3 +371,126 @@ cls <- getClusterPerPart(MAX_CLUSTERS, res_nhc)
 sil <- getSilhouette(cls[[k-1]], t(norm_rna))
 heatMap(t(norm_rna), res_dist, sil, NULL, NULL)
 ```
+
+```{r}
+data("counts_combatseq")
+data("gene_query")
+counts_matrix0 <- rename(counts_combatseq, ensembl_gene_id = gene_id) %>%
+    left_join(gene_query) %>%
+    arrange(hgnc_symbol) %>%
+    data.frame() %>%
+    filter(!str_detect(hgnc_symbol, "^$"))
+gene_hgnc <- pull(counts_matrix0, hgnc_symbol) %>%
+    snakecase::to_any_case(case = "none", sep_in = NULL, unique_sep = "_")
+facs <- select(counts_matrix0, -c(ensembl_gene_id, hgnc_symbol)) %>% 
+    set_colnames(colnames(.) %>% str_remove_all("^X")) %>%
+    round() %>%
+    as.matrix() %>% 
+    vst() %>%
+    t() %>% 
+    as.data.frame() %>%
+    set_colnames(gene_hgnc)
+
+dis <- "(Adult)|(Systemic)"
+clinic1 <- clinic %>%
+  filter(!str_detect(C_2643_3798, "(suspi)|(angiosarcoma)|(Crohn)")) %>%
+  filter(str_detect(C_2643_3798, paste0(dis, "|(Negative)")))
+
+temp <- inner_join(
+    as.data.frame(facs) %>% filter(str_detect(rownames(.), "A")) %>% mutate(ID = rownames(.) %>% str_remove_all("[AB](\\d{2}PB\\d)?") %>% as.numeric()),
+    mutate(clinic1, ID = as.numeric(C_2643_3796))
+)
+res_scaled <- temp %>% column_to_rownames("ID") %>% select(top_genes)
+
+get_top0(l_de2[[1]], n = 100) %>% rownames() -> top_genes
+control <- filter(blocks1[[1]], group == 0) %>% rownames()
+sd <- filter(blocks1[[1]], group == 1) %>% rownames()
+rbind(res_scaled[sd, ], res_scaled[control, ]) %>% as.data.frame() %>% scale0("minmax") %>% plot_heatmap(cex = 0.7, colour = c("blue", "gray", "#cd5b45"))
+```
+
+# FACS
+```{r}
+data("clinic")
+# data("facs")
+# lapply(
+#     c(                           
+#         "Live Cells", 
+#         "B Cells", 
+#         "NK Cells",
+#         "T Cells",
+#         "Monocytes",
+#         "Dendritic Cells",
+#         "CD4\\+ T Cells",
+#         "CD8\\+ T Cells"
+#     ),
+#     function(i)
+#         colnames(facs) %>%
+#         str_extract_all(paste0(".*in ", i)) %>%
+#         unlist() %>%
+#         discard(function(x) str_detect(x, "(^No )|(^Double Negative)|(median)|(iqr)")) %>% 
+#         sort()
+# ) %>% unlist() -> cells0
+facs1 <- facs %>% filter(str_detect(rownames(.), "A")) %>%
+  select(cells0)
+
+colnames(facs1) <- colnames(facs1) %>% str_replace_all("(GROalpha)", "\\1/CXCL1") %>% str_replace_all("al((ph)|(f))a", "\u03b1") %>% str_replace_all("beta", "\u03b2") %>% str_replace_all("gamma", "\u03b3") %>% str_replace_all("lambda", "\u03bb") %>% str_replace_all("_", "/") %>% str_replace_all("(Fractalkine)", "\\1/CX3CL1") %>% str_replace_all("(MDC)", "\\1/CCL22") %>% str_replace_all("(IP-10)", "CXCL10/\\1") %>% str_replace_all("(MCP-1)", "\\1/CCL2") %>% str_replace_all("(IL-28b)-(IFNλ3)", "\\2/\\1") %>% str_replace_all("(IL-37)-(IL-1F7)", "\\1/\\2") %>% str_replace_all("MIG/CXCL9", "CXCL9/MIG")
+facs1 <- facs1 %>% select(sort(colnames(.)))
+
+
+# facs1 <- counts_matrix %>% select(matches("A\\.")) %>% t() %>% as.data.frame() %>% select(sort(colnames(.))) %>% set_rownames(rownames(.) %>% str_remove_all("A\\."))
+cells0 <- de_genes0[[1]]
+facs1 <- counts_combatseq %>% filter(str_detect(rownames(.), "A")) %>% select(cells0)
+```
+
+
+```{r}
+dis <- "(Adult)|(Systemic)"
+pos <- "SD"
+col_pos <- "#4DAF4A"
+col_neg <- "black"
+# dis <- "(Chronic)"
+# pos <- "CRO"
+# col_pos <- "#FFD92F"
+neg <- "SAID"
+clinic1 <- clinic %>%
+  filter(!str_detect(C_2643_3798, "(suspi)|(angiosarcoma)|(Crohn)")) %>%
+  # filter(str_detect(C_2643_3798, paste0(dis, "|(Negative)")))
+  filter(!str_detect(C_2643_3798, "Negative"))
+facs0 <- inner_join(
+  as.data.frame(facs1) %>% mutate(ID = rownames(.) %>% str_remove_all("A") %>% as.numeric()), 
+  clinic1 %>% mutate(ID = as.numeric(C_2643_3796))
+) %>% 
+  column_to_rownames("ID")
+disease1 <- facs0$C_2643_3798 %>% 
+        # str_replace_all("(Adult.*", "AOSD") %>%
+        # str_replace_all("Systemic.*", "SOJIA") %>%
+        str_replace_all("(Systemic.*)|(Adult.*)", "SD") %>%
+        str_replace_all("Chronic.*", "CRO") %>%
+        str_replace_all("Inflammation.*", "IUO") %>%
+        str_replace_all("Pediatric.*", "PIMS") %>% 
+        str_replace_all("Recurrent (Pericarditis)", "\\1") %>%
+        str_replace_all("(Negative control)", "HV") %>%
+        str_remove_all(" \\(.*")
+Y <- as.factor(disease1) %>%  set_names(rownames(facs0))
+disease0 <- str_replace_all(disease1, "(.*Takayasu.*)|(.*Behçet.*)|(.*Kawasaki.*)", GimmeMyPlot:::palette_discrete()[1]) %>%
+        str_replace_all("(.*Pyoderma gangrenosum.*)|(.*Sweet syndrome.*)", GimmeMyPlot:::palette_discrete()[2]) %>%
+        str_replace_all("(AOSD)|(SOJIA)|(Still's Disease)|(Systemic.*)|(Adult.*)|(SD)", GimmeMyPlot:::palette_discrete()[3]) %>% 
+        str_replace_all("(FMF)|(TRAPS)|(CAPS)|(HIDS)", GimmeMyPlot:::palette_discrete()[4]) %>%
+        str_replace_all("(IUO)|(Inflammation.*)", GimmeMyPlot:::palette_discrete()[5]) %>%
+        str_replace_all("(Negative control)|(HV)", "black") %>%
+        str_replace_all("Pericarditis", GimmeMyPlot:::palette_discrete()[6]) %>%
+        str_replace_all("Schnitzler", GimmeMyPlot:::palette_discrete()[7]) %>%
+        str_replace_all("(CRO)|(Chronic.*)", GimmeMyPlot:::palette_discrete()[8]) %>%
+        str_replace_all("(PIMS)|(Pediatric.*)", GimmeMyPlot:::palette_discrete()[9]) %>%
+  set_names(rownames(facs0))
+disease <- ifelse(str_detect(facs0$C_2643_3798, dis), pos, neg) %>% as.factor() -> Y
+row_col <- c(col_pos, col_neg) %>% set_names(c(pos, neg)) %>% .[sort(c(pos, neg))]
+row_annotation <- data.frame(Disease = disease)
+names_levels <- levels(disease)
+# cells0 <- colnames(facs1)
+# cells0 <- unlist(de_genes0) %>% unname()
+facs0 <- select(facs0, cells0) %>% remove_constant() -> fact_tot0
+# res_scaled_na <- scale0(facs0, "minmax")
+# fact_tot0 <- apply(facs0, 2, function(x) {x[is.na(x)] <- median(x, na.rm = TRUE); x})
+# res_scaled <- scale0(fact_tot0)
+```
