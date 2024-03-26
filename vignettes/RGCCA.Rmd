@@ -129,9 +129,15 @@ data("luminex_geneva")
 
 # Model
 ```{r model}
-res <- rgcca(blocks, ncomp = ncomp, response = n, sparsity = c(1, 0.1)) # tau = "optimal"
-plot_ave(res, cex = 1.8, title = "")
-RGCCA::plot_network2(res, colors = c("gray", "gray"))
+res <- rgcca(blocks0[c(1, 3:4)], ncomp = ncomp, response = n)
+res0 <- rgcca(blocks0[c(1, 3:4)], ncomp = ncomp, superblock = TRUE) #, sparsity = c(1, 0.1)) # tau = "optimal"
+# res1 <- rgcca(blocks0[c(1, 3:4, 2)], ncomp = ncomp, superblock = TRUE, sparsity = c(rep(1, 3), 0.2, 0.1))
+# res1 <- rgcca(blocks0[c(1, 3:4, 2)], ncomp = ncomp, superblock = TRUE, sparsity = c(1, rep(1, 2), 0.1, 0.08))
+res1 <- rgcca(c(Group = list(disj), blocks0[c(2:4)]), ncomp = c(1, rep(2, 3)), superblock = TRUE, sparsity = c(1, 0.1, rep(1, 2), 0.08))
+res2 <- rgcca(blocks0[c(1, 3:4, 2)], ncomp = ncomp, response = 1, sparsity = c(rep(1, 3), 0.2))
+res3 <- rgcca(blocks0[c(1:2)], ncomp = ncomp, superblock = TRUE, sparsity = c(1, 0.1))
+res4 <- rgcca(blocks0[c(1:2)], ncomp = ncomp, response = n, sparsity = c(1, 0.4))
+res5 <- rgcca(blocks0[c(2:2)], ncomp = ncomp,  sparsity = rep(0.4, 2))
 
 sapply(ncol(res$a[[2]]), function(i) res$a[[2]][, i] != 0) %>%
     which() %>%
@@ -142,6 +148,9 @@ sapply(ncol(res$a[[2]]), function(i) res$a[[2]][, i] != 0) %>%
 
 # Variable
 ```{r var}
+plot_ave(res, cex = 1.8, title = "")
+RGCCA::plot_network2(res2, colors = c("gray", "gray"))
+
 plot_var_2D(
     res,
     cex_main = 30,
@@ -165,6 +174,41 @@ plot_var_2D(
     cex_main = 30,
     cex_lab = 20,
     no_overlap = TRUE
+)
+
+plot_var_2D(
+    res0,
+    i_block = 4,
+    cex_lab = 25,
+    no_overlap = TRUE,
+    cex = 1.5,
+    n_mark = 10,
+    colors = get_colors()[c(4, 1:3)],
+    force = 20,
+    title = ""
+)
+
+plot_var_2D(
+    res1,
+    i_block = 5,
+    cex_main = 30,
+    cex_lab = 30,
+    no_overlap = TRUE,
+    cex = 2,
+    n_mark = 30,
+    colors = get_colors()[c(5, 2:3, 1)],
+    force = 50,
+    title = ""
+)
+
+plot_var_1D(
+    res1,
+    i_block = 5,
+    cex_main = 30,
+    cex = 2.5,
+    n_mark = 20,
+    colors = get_colors()[c(5, 2:3, 1)],
+    title = ""
 )
 ```
 
@@ -215,7 +259,7 @@ tab_gender <- table_occ(
 # Indivduals
 ```{r ind}
 Reduce(cbind, res$Y) %>%
-    set_colnames(paste0(rep(c("Clinic", "RNA"), each = 2), ": Dim.", seq(2))) %>%
+    set_colnames(paste0(rep(names(res$Y), each = ncomp), ": Dim.", seq(ncomp))) %>%
     t() %>%
     corrplot(is.corr = FALSE, col = colorRampPalette(colors_ind)(100))
 
@@ -322,21 +366,23 @@ theme_perso_2D(
 ```
 
 # Bootstrap
-```{r boot}
+```{r boot, eval = FALSE}
 # eval <- rgcca_cv_k(res, validation = "loo")
-n_boot <- 1000
-# bb <- bootstrap(res, n_boot = n_boot)
+n_boot <- 500
+bb2 <- bootstrap(res, n_boot = n_boot)
 file_boot <- "bootstrap_still_rna_clinic.RData"
-# use_data(bb, file = file_boot, overwrite = TRUE)
-load(file.path(path, file_boot))
+use_data(bb2, file = file_boot, overwrite = TRUE)
+load(file.path(path1, file_boot))
 top_var <- get_bootstrap(bb, type = "loadings")
 top_genes <- top_var %>%
     data.frame() %>%
     mutate(name = rownames(top_var)) %>%
     tibble() %>%
-    arrange(desc(bootstrap_ratio)) %>%
-    filter(adjust.pval <= 0.05)
+    arrange(desc(bootstrap_ratio)) # %>%
+    # filter(adjust.pval <= 0.05)
 # plot_bootstrap_2D(df_b = top_var, y = "occurences")
-plot_bootstrap_1D(df_b = top_var, x = "bootstrap_ratio", display_bar = FALSE, y = "bootstrap_ratio")
+    arrange(top_genes, desc(mean)) %>% head(30) %>% plot_bar(cex = 7)
 plot_bootstrap_1D(df_b = top_var, x = "bootstrap_ratio", display_bar = FALSE, y = "sign", n_mark = 100)
+plot_bootstrap_1D(df_b = top_var, x = "occurences", display_bar = FALSE, y = "occurences")
 ```
+
