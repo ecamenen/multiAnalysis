@@ -736,18 +736,31 @@ cbind(sapply(blocks, function(i) paste0(which(pull(i, 1) == 0) %>% length(), "/"
 #     set_names(rownames(tmp) %>% str_remove_all("_\\d*")) %>%
 #     sort(decreasing = TRUE)})
 
+
+de_genes2 <- list.map(l_de2, f(i) ~ {
+    list.map(c("Up-regulated", "Down-regulated"), f(j) ~ {
+      filter(i, Expression == j) %>%
+        get_top0(2, 0.05, 200) %>%
+            pull(ensembl_ids)
+    })
+})
+
 de_genes_ranked <- list.map(l_de2, f(i, j) ~ {
     get_top0(i, 0.01, 1, n = 50000, rank = TRUE) -> tmp
-    tmp$pfc %>%
+    (tmp$log2FoldChange) %>%
         set_names(tmp$ensembl_ids) %>%
         sort(decreasing = TRUE)
 })
 sapply(de_genes_ranked, length)
-
 # top_genes <- list.map(c("Up", "Down"), f(i, j) ~ list.map(de_genes1, .[[j]]))
 # list.map(de_genes2, .[[1]])
 # plot_venn1(top_genes[[1]], ratio = .4, wrap = 20)
 # top_genes0 <- list.map(c("Up", "Down"), f(i, j, k) ~ top_genes[[j]] %>% set_names(paste0(names(.), " (", i, ")")))
+
+top15_genes <-  get_top0(l_de2[[1]], n = 15, fc_threshold = fc_threshold, p = p_threshold) %>% rownames() %>% sort()
+sapply(top15_genes, function(i) get_ncbi_gene(i)) %>% unname()
+
+get_genes_path(enriched[[1]][[1]][-3], top15_genes, detect = "Genes", name = "Term", cutoff = 1)
 ```
 
 ```{r, eval = FALSE}
@@ -774,15 +787,29 @@ t_genes <- list.map(
     }
 ) %>% Reduce(cbind, .)
 t_genes <- t_genes[rownames(t_genes) %in% paste0("A.", c(naive, control)), ]
-m2 <-  correlate(t_genes, cutoff = 0.7)
-edge <- Edge(m3$r, m3$p)
-as.matrix(edge)  %>% as.data.frame() %>% filter(from %in% n_genes) %>% filter(to %in% n_genes) -> edge
+cutoff <- 0.7
+res <- GimmeMyPlot:::mcor_test(
+    t_genes,
+    estimate = TRUE,
+    p.value = TRUE,
+    method = "spearman",
+    method_adjust = "BH"
+)
+  r <- res$estimate
+  r[abs(r) < cutoff] <- diag(r) <- 0
+  r[is.na(r)] <- 0
+  p <- res$p.value
+  r[p >= 0.05] <- 0
+edge <- Edge(r, p)
+# as.matrix(edge)  %>% as.data.frame() %>% filter(from %in% n_genes) %>% filter(to %in% n_genes) -> edge
+as.matrix(edge)  %>% as.data.frame() %>% filter((from %in% n_genes) | (to %in% n_genes)) -> edge
 class(edge) <- c("Edge", class(edge))
 node <- Node(edge, scale = FALSE)
 edge$label <- as.numeric(edge$label)
 edge$weight <- as.numeric(edge$weight)
 cex <- 1
-colour_edge = c("#C6C6C6", "#C6C6C6")
+# colour_edge = c("#C6C6C6", "#C6C6C6")
+colour_edge <- get_colors()[c(3, 1)]
 colour_node = c("white", "black")
   edge$color <- ifelse(
     edge$weight > 0,
@@ -803,12 +830,14 @@ colour_node = c("white", "black")
 as.matrix(n) %>% as.data.frame() %>% arrange(desc(size)) %>% head(20)
 plot_cor_network(m = m)
 
-n_genes <- as.matrix(node) %>% as.data.frame() %>% filter(as.numeric(size) < 40) %>% pull(id)
+n_genes <- as.matrix(node) %>% as.data.frame() %>% filter(as.numeric(size) >= 50) %>% pull(id)
 # n_genes <- as.matrix(node) %>% as.data.frame() %>% arrange(desc(size)) %>% head(7) %>% pull(id)
-as.matrix(node) %>% as.data.frame() %>% column_to_rownames("id") %>% mutate(size = as.numeric(size))  %>% plot_bar(colour = c("#99000D", "gray"), n = 15)
+as.matrix(node) %>% as.data.frame() %>% column_to_rownames("id") %>% mutate(size = as.numeric(size))  %>% plot_bar(colour = c("#99000D", "gray"), n_max = 15, label_x = "value")
 as.matrix(node) %>% as.data.frame() %>% pull(size) %>% as.numeric() %>% plot_violin(pch_size = 2, pch_colour = "grey30", pch_alpha = 0.25)
 counts_matrix %>% filter(rownames(.) %in% n_genes) %>% pull(ensembl_gene_id)
 get_genes_path(enriched[[1]][[1]][-3], n_genes, detect = "Genes", name = "Term", cutoff = 1)
+```
+
 ```
 
 # ORA
