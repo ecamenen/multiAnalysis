@@ -355,30 +355,32 @@ logx_trans <- function(x, base = 2) {
 }
 
 log2x_trans <- trans_new("log2x", function(x) logx_trans(x, 2), function(x) expx_trans(x, 2), breaks = breaks_extended(4), format = label_number_auto())
-log10x_trans <- trans_new("log10x", function(x) -log10(x), function(x) 10^(-x), breaks = breaks_extended(6), format = label_number_auto())
+log10nx_trans <- trans_new("log10nx", function(x) -log10(x), function(x) 10^(-x), breaks = breaks_extended(6), format = label_number_auto())
 
 #' @export
-volcano_plot <- function(res, top_genes = NULL, title = "", legend = "right", cex = 1.5) {
+volcano_plot <- function(res, top_genes = NULL, title = "", legend = "right", cex = 1.5, fc_threshold = 0.5, p_threshold = 0.05, force = 10, ...) {
   # seq(3, 10) %>% paste0("2^", .) %>% sapply(function(x) parse(text = x) %>% eval())
     # ds <- c(1.5, 3, 6, 20, 60)
     ds <- c(min(res$log2fc, na.rm = TRUE), max(res$log2fc, na.rm = TRUE)) %>% pretty(5) %>% expx_trans() %>% c(1)
-    ps <- min(res$padj, na.rm = TRUE) %>% log10() %>% `-`(1) %>% seq(-1, .) %>% pretty(3) %>% paste0("1e", .) %>% as.numeric()
+    ps <- min(res$padj, na.rm = TRUE) %>% log10() %>% `-`(1) %>% seq(-1, .) %>% pretty(3) %>% paste0("1e", .) %>% as.numeric() %>% c(1)
     # ds <- c(-1.2, -0.8, -0.5, 0.5, 0.8, 1.2)
-    res0 <- data.frame(t(c(rep(NA, 4), -1, NA, Inf, NA, -1, NA))) %>%
-        mutate_all(as.numeric) %>%
-        data.frame(c("Up-regulated", "Down-regulated")) %>%
-        set_colnames(colnames(res)) %>%
-        rbind(res)
+    tmp <- data.frame(t(c(rep(NA, 4), -1, NA, Inf, NA, -1, NA))) %>%
+      mutate_all(as.numeric) %>%
+      data.frame(c("Up-regulated", "Down-regulated")) %>%
+      set_colnames(colnames(res))
+    res0 <- rbind(tmp, res)
+    top_genes <- rbind(tmp, top_genes)
     p <- ggplot(res0, aes(expx_trans(log2fc, 2), padj)) +
-      geom_point(aes(color = Expression), size = 3 * cex, alpha = 0.5) +
-      geom_vline(xintercept = expx_trans(0.5) * c(-1, 1), colour = "gray", lty = 2, lwd = 1.2) +
-      geom_hline(yintercept = 0.05, colour = "gray", lty = 2, lwd = 1.2) +
+      geom_point(aes(fill = Expression), size = 3 * cex, alpha = 0.5, pch = 21, stroke = NA) +
+      geom_vline(xintercept = expx_trans(fc_threshold) * c(-1, 1), colour = "gray", lty = 2, lwd = 1.2) +
+      geom_hline(yintercept = p_threshold, colour = "gray", lty = 2, lwd = 1.2) +
       xlab("FC") +
       ylab("FDR") +
-      scale_color_manual(values = c("dodgerblue3", "gray50", "firebrick3")) +
+      scale_fill_manual(values = c("#A6CEE3", "gray50", "#FB9A99")) +
+      scale_color_manual(values = c("dodgerblue3", "firebrick3")) +
       guides(colour = guide_legend(override.aes = list(size = 2))) +
       scale_x_continuous(trans = log2x_trans, breaks = c(rev(ds) * -1, ds), labels = label_number_auto()) +
-      scale_y_continuous(breaks = ps, trans = log10x_trans, labels = label_number_auto()) +
+      scale_y_continuous(breaks = ps, trans = log10nx_trans, labels = label_number_auto()) +
       ggtitle(label = title) +
       theme_classic() %>%
       theme_perso0(cex) +
@@ -387,7 +389,9 @@ volcano_plot <- function(res, top_genes = NULL, title = "", legend = "right", ce
         p + geom_text_repel(
             data = top_genes,
             mapping = aes(expx_trans(log2fc, 2), padj, label = name, color = Expression),
-            size = cex * 6
+            size = cex * 6,
+            force = force,
+            ...
         )
     } else {
         p
