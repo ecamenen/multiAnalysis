@@ -225,20 +225,32 @@ get_gene_term <- function(x) {
 
 #' @export
 plot_enrich <- function(x, n = 20, title = NULL, type = "go", cex = 1, ratio = 5, wrap = 50) {
+    func <- function(x) {
+      str_remove_all(x, "Genes ((down)|(up))-regulated ((in ?)|(with))") %>%
+      str_remove_all("comparison of ") %>%
+      str_remove_all("Genes ((posi)|(nega))tively correlated with ") %>%
+      str_remove_all("\\[GeneID=\\d*\\]") %>%
+      str_remove_all("([uU]ntreated )?peripheral blood mono((nuclear)|(cytes))( cells?)?( \\(PBMC\\))?( from)? ") %>%
+      str_remove_all("the ")
+      }
     if (type == "gsea") {
       df <- mutate(
             x,
             Adjusted.P.value = p.adjust,
-            Term = str_to_title(Description),
+            Term = Description %>%
+              func() %>%
+              to_title(),
             Count = setSize,
             Overlap = core_enrichment,
             generatio = str_split(Overlap, "/") %>% sapply(length) / setSize
-        )
+        ) %>% arrange(desc(generatio))
     } else if (type == "kegg") {
       df <- mutate(
         x,
         Adjusted.P.value = p.adjust,
-        Term = str_to_title(Description),
+        Term = Description %>%
+          func() %>%
+          to_title(),
         Count = str_split(GeneRatio, "/") %>%
           sapply(function(i) as.numeric(i[1])),
         generatio = str_split(GeneRatio, "/") %>%
@@ -254,21 +266,33 @@ plot_enrich <- function(x, n = 20, title = NULL, type = "go", cex = 1, ratio = 5
             }
         )
     }
-    df0 <- filter(df, Adjusted.P.value <= 0.05)
+    df0 <- filter(df, Adjusted.P.value <= 0.05) %>%
+      filter(!is.na(Term))
     if (nrow(df0) < n)
       df0 <- df
-    df <- arrange(df0, Adjusted.P.value) %>%
-      head(n) %>%
+    if (type %in% c("gsea", "kegg")) {
+    df0 <- arrange(df0, Adjusted.P.value)
+    y <- "Adjusted.P.value"
+     } else {
+      df0  <- arrange(df0, desc(Combined.Score))
+      y <- "Combined.Score"
+    }
+    df <- head(df0, n) %>%
       mutate(
         label = {
-          str_remove_all(Term, "\\(.*") %>%
+          str_remove_all(Term, "\\(.*\\)") %>%
             str_remove_all("((ORPHA)|(WP)|(HSA)|(R-)).*") %>%
             str_trunc2(wrap) %>%
+            str_trim() %>%
             to_title()
         },
-        rank = rev(row_number(Adjusted.P.value))
+        rank = rev(row_number(!!sym(y)))
       )
-
+    if (type %in% c("gsea", "kegg")) {
+      df <- mutate(df, rank = rev(row_number(!!sym(y))))
+    } else {
+      df <- mutate(df, rank = row_number(!!sym(y)))
+    }
     colour_x <- ifelse(df$Adjusted.P.value <= 0.05, get_colors()[1], "gray50")
     p <- ggplot(df, aes(generatio, rank)) +
         geom_point(aes(color = Adjusted.P.value, size = Count)) +
