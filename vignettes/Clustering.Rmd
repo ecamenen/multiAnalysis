@@ -364,8 +364,61 @@ GimmeMyPlot::plot_bar(
 # plotHistogram(df = res, hjust = -0.4) +
 #     geom_hline(yintercept = c(35), col = "red")
 
+y[, 1] %>% set_names(rownames(y)) -> Y
 cl <- cls[[k - 1]]
+# as.factor(as.matrix(disease)) %>% set_names(row.names(blocks11[[1]])) -> Y
+factor(cl, labels = c(Y[cl == 1] %>% typical(), Y[cl == 2] %>% typical())) %>% confusionMatrix(as.factor(Y), positive = "SD") -> tmp; list(tmp$table, c(tmp$overall[1], tmp$byClass[seq(2)]) %>% round(2))
+Y[cl == 1] %>% .[. == "Control"]
 n <- 6
+
+(table(Y)[1])
+
+table(cl)
+sapply(unique(cl), function(i) Y[cl == i] %>% typical())
+lapply(unique(cl), function(i) Y[cl == i] %>% table())
+sapply(unique(cl), function(i) Y[cl == i] %>% .[. != typical(.)])
+lapply(unique(cl), function(i) Y[cl == i] %>% table()) -> tmp0; 
+
+cl[cl == 4] <- 1
+tmp0(c(1, 2, ))
+
+n_levels <- c("SD", "SAID", "HV")
+cl0 <- factor(cl, labels = n_levels)
+Y0 <- mapply(function(x, y) rep(x, y), n_levels, unique(table(cl))) %>% unlist() %>% factor()
+confusionMatrix(cl0, Y0) -> tmp
+tmp$overall[1] %>% round(2)
+tmp$byClass[seq(3), seq(2)] %>% round(2) %>% as.data.frame() %>% set_rownames(rownames(.) %>% str_remove_all("Class\\: "))
+
+col_kable<- function(k, x, i) {
+  n <- sum(x[, i])
+  k %>% column_spec(i+1, background =  colorRampPalette(c("white", "black"))(n)[x[, i]], color = ifelse(x[, i]/n > 0.5, "white", "black"))
+}
+
+# cf <- 
+# kbl(tmp$table, escape = FALSE, align = "c") %>%
+#     kable_minimal(full_width = FALSE) %>%
+#     col_kable(tmp$table, 1) %>%
+#     col_kable(tmp$table, 2) %>%
+#     col_kable(tmp$table, 3) %>%
+#     column_spec(1, bold = TRUE, color = row_col) %>%
+#     footnote(general  = paste0("Accuracy: ", tmp$overall[1] %>% round(2)))
+#%>%
+  # row_spec(0, bold = TRUE, color = row_col)
+
+kable(tmp$table, align = "c") %>%
+    kable_styling(full_width = F, stripe_color  = "white") %>%
+    col_kable(tmp$table, 1) %>%
+    col_kable(tmp$table, 2) %>%
+    col_kable(tmp$table, 3) %>%
+    column_spec(1, bold = TRUE, color = row_col) %>%
+    row_spec(0:3, extra_css = "border-bottom-style: none; border-top-style: none") #%>%
+    # footnote(tmp$overall[1] %>% round(2), general_title = "Accuracy: ",  footnote_as_chunk = TRUE, title_format = c("underline")) 
+
+kbl(tmp$byClass[seq(3), seq(2)] %>% round(2) %>% as.data.frame() %>% set_rownames(rownames(.) %>% str_remove_all("Class\\: ")), align = "c") %>%
+  kable_minimal(full_width = FALSE) %>%
+column_spec(1, bold = TRUE, color = row_col)  %>%
+    row_spec(0:3, extra_css = "border-bottom-style: none; border-top-style: none") 
+
 # blocks0 <- blocks
 # var <- c("alat", "asat", "ggt")
 # colnames(blocks0) <- to_any_case(colnames(blocks0), unique_sep = NULL, parsing_option = 3)
