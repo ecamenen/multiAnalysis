@@ -436,13 +436,20 @@ filtered_counts <- select(filtered_counts, -ensembl_gene_id) %>% round()
 db_annot <- useEnsembl(biomart = "genes", dataset = "hsapiens_gene_ensembl", version = 104)
 # datasets <- listDatasets(db_annot)
 # filter(datasets, str_detect(description, "Human")) %>% pull(version)
-
+# listFilters(db_annot)
 gene_query <- getBM(
     attributes = c("ensembl_gene_id", "hgnc_symbol"),
     filters = c("ensembl_gene_id", "transcript_biotype", "chromosome_name"),
     values = list(gene_name, "protein_coding", seq(22)),
     mart = db_annot
 )
+# gene_query <- getBM(
+#     attributes = c("ensembl_transcript_id_version", "hgnc_symbol"),
+#     filters = c( "transcript_biotype", "chromosome_name"),
+#     values = list("protein_coding", seq(22)),
+#     mart = db_annot
+# )
+# gene_query %>% filter(str_detect(hgnc_symbol, "SAA[12]"))
 
 # gene_query <- read_tsv(file = file.path(path, "martquery.tsv")) %>% set_colnames(c("ensembl_gene_id", "hgnc_symbol"))
 # which(is.na(gene_query$`Gene name`)) %>% length()
@@ -457,6 +464,21 @@ use_data(gene_query, overwrite = TRUE)
 ```
 
 ```{r, eval = FALSE}
+db_annot <- useEnsembl(biomart = "genes", dataset = "hsapiens_gene_ensembl", version = 104)
+# datasets <- listDatasets(db_annot)
+# filter(datasets, str_detect(description, "Human")) %>% pull(version)
+# listFilters(db_annot)
+
+gene_query_entrez <- getBM(
+    attributes = c("hgnc_symbol", "entrezgene_id"),
+    filters = c("transcript_biotype", "chromosome_name"),
+    values = list("protein_coding", seq(22)),
+    mart = db_annot
+) %>% filter(hgnc_symbol != "") %>%
+  filter(!is.na(entrezgene_id))
+use_data(gene_query_entrez, overwrite = TRUE)
+```
+
 ```{r}
 # blocks <- filter(blocks, !str_detect(C_2643_3798, "Negative"))
 # blocks <- lapply(
@@ -551,6 +573,44 @@ l_de0 <- list.map(blocks, f(i, j) ~ {
         design = ~ batch + group
     ) %>% DESeq()
 })
+
+# i <- blocks[[1]]
+# countData <- filtered_counts %>% select(rownames(i))
+# dseq_ds <- DESeqDataSetFromMatrix(
+#     countData = countData,
+#     colData = i,
+#     design = ~ batch + group
+# )
+# resultsNames(l_de0[[1]])
+# 
+# dds0 <- estimateSizeFactors(dseq_ds)
+# dds1 <- estimateDispersions(dds0)
+# dds <- nbinomWaldTest(dds1)
+# ddss <- DESeq(dseq_ds)
+# res <- results(ddss)
+# counts(ddss, normalized=TRUE)
+
+# l_de0 <- list.map(blocks, f(i, j) ~ {
+#   weigth_1 <- 1 -> weigth_2
+#   if (j %in% c(1, 4)) {
+#     weigth_2 <- 3
+#   } else if (j == 3) {
+#     weigth_2 <- 4
+#   } else if (j == 5) {
+#     weigth_2 <- 2
+#   }
+#   
+#     k <- lapply(c(0, 1), function(j) filter(i, group == j)) %>%
+#         .[c(rep(1, weigth_1), rep(2, weigth_2))]
+#     i <- list.rbind(k)
+#     countData <- filtered_counts[, sapply(k, rownames) %>% unlist()] %>%
+#       set_colnames(rownames(i))
+#     DESeqDataSetFromMatrix(
+#         countData = countData,
+#         colData = i,
+#         design = ~ group
+#     ) %>% DESeq()
+# })
 # results() %>%
 l_de <- list.map(l_de0, f(i) ~ lfcShrink(i, coef = "group_1_vs_0") %>%
     as.data.frame())
