@@ -212,7 +212,7 @@ getDistPerVariable0(blocks, som_inds) %>% getDistPerVariable0(som_clusters)
 ```
 
 # Heatmap
-```{r}
+```{r, eval = FALSE}
 # Clustering for the variables
 if (hc_method > 2) {
     col_dist <- t(som_codes) %>%
@@ -252,16 +252,20 @@ if (hc_method > 2) {
 
 # Code plots
 ```{r}
+dist_neighbours <- plot(som_model, type = "dist.neighbours")
+quality <- plot(som_model, type = "quality")
 par(mfrow = c(2, 2))
-plot(som_model, type = "counts", shape = "straight", border = NA)
-dist_neighbours <- plot(som_model, type = "dist.neighbours", shape = "straight", border = NA)
-print_stats(dist_neighbours, 2)
+col_func <- function(i) colorRampPalette(c("blue", "grey90", "red"))
+plot(som_model, type = "counts", shape = "straight", border = NA, palette.name = col_func(max(pull(df, n))))
 add.cluster.boundaries(som_model, som_clusters, lwd = 5, col = "white")
-quality <- plot(som_model, type = "quality", shape = "straight", border = NA)
-print_stats(quality, 2)
+plot(som_model, type = "dist.neighbours", shape = "straight", border = NA, palette.name = col_func(max(dist_neighbours)))
+print_stats0(dist_neighbours, 2)
+add.cluster.boundaries(som_model, som_clusters, lwd = 5, col = "white")
+plot(som_model, type = "quality", shape = "straight", border = NA, palette.name = col_func(max(quality)))
+add.cluster.boundaries(som_model, som_clusters, lwd = 5, col = "white")
+print_stats0(quality, 2)
 names(ind_clusters) <- rownames(res_scaled_na)
-plot(som_model, type = "changes") -> p
-p
+# plot(som_model, type = "changes")
 par(mfrow = c(1, 1))
 
 plot(
@@ -269,7 +273,7 @@ plot(
     cex = 0.7,
     type = "mapping",
     labels = names(ind_clusters),
-    col = col_grp(x = ind_clusters),
+    col = disease0,
     bg = col_grp(a = 0.25),
     shape = "straight",
     border = NA
@@ -278,21 +282,50 @@ add.cluster.boundaries(som_model, som_clusters, lwd = 5, col = "white")
 
 plot(
     som_model,
+    cex = 0.7,
+    type = "mapping",
+    labels = rownames(facs0),
+    col = disease0,
+    bg = col_grp(a = 0.25),
+    shape = "straight",
+    border = NA
+)
+add.cluster.boundaries(som_model, som_clusters, lwd = 5, col = "white")
+
+plot(
+    som_model,
+    cex = 0.7,
+    type = "mapping",
+    labels = disease1,
+    col = disease0,
+    bg = col_grp(a = 0.25),
+    shape = "straight",
+    border = NA
+)
+add.cluster.boundaries(som_model, som_clusters, lwd = 5, col = "white")
+
+cex <- 1.5
+tiff(
+      "temp.tiff",
+      units = "px",
+      width = 2000 * cex,
+      height = 2000 * cex,
+      res = 300
+    )
+plot(
+    som_model,
     type = "codes",
     palette.name = function(i) {
-          c(
-              brewer.pal(9, "YlGn")[4:8],
-              brewer.pal(9, "Reds")[c(3, 4, 5, 7)],
-              brewer.pal(9, "Blues")[c(4, 6, 8)],
-              brewer.pal(10, "Paired")[9:10]
-          )
+                colorRampPalette(GimmeMyPlot:::palette_discrete2())(ncol(facs0))
       },
     codeRendering = "segments",
+    whatmap = 1,
     shape = "straight",
     border = NA,
     bg = col_grp(a = 0.25)
 )
-add.cluster.boundaries(som_model, som_clusters, lwd = 20, col = "white")
+# add.cluster.boundaries(som_model, som_clusters, lwd = 20, col = "white")
+dev.off()
 
 # plot(som_model, type = "codes", palette.name = rainbow, codeRendering = "segments")
 # plot(som_model, type = "codes", palette.name  = function(i) get_colors()[seq(14)], codeRendering = "segments")
