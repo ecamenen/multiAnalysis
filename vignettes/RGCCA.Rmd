@@ -386,3 +386,275 @@ plot_bootstrap_1D(df_b = top_var, x = "bootstrap_ratio", display_bar = FALSE, y 
 plot_bootstrap_1D(df_b = top_var, x = "occurences", display_bar = FALSE, y = "occurences")
 ```
 
+# New version
+```{r}
+block_colors <- brewer.pal(n = 9, name = "Set1")
+n_cores <- parallel::detectCores() - 2
+ncomp <- 2
+Y <- pull(blocks0[[n]], 1)
+Y <- blocks0[[n]][, 1] %>% as.factor()
+
+disj <- model.matrix(~ Y - 1) %>% 
+  as.data.frame() %>%
+  set_colnames(levels(Y)) %>% 
+  set_rownames(rownames(blocks0[[n]]))
+
+# fit <- rgcca(
+#   blocks = blocks0[c(1, 3:4)],
+#   ncomp = ncomp,
+#   response = n
+# )
+# summary(fit)
+
+# CV
+ids <- caret::createDataPartition(
+  Y,
+  p = .75, 
+  list = FALSE
+)
+training <- lapply(blocks0[c(1:2)], function(x) as.matrix(x)[ids, , drop = FALSE])
+testing <- lapply(blocks0[c(1:2)], function(x) as.matrix(x)[-ids, , drop = FALSE])
+
+cv_out <- rgcca_cv(
+  blocks = training, 
+  response = n,
+  par_type = "ncomp",
+  par_value = sapply(blocks0, NCOL),
+  par_length = 10,
+  prediction_model = "lda",
+  validation = "kfold",
+  k = 10, 
+  n_run = 10,
+  metric = "Balanced_Accuracy",
+  n_cores = n_cores,
+  NA_method = "na.ignore"
+)
+summary(cv_out)
+plot(cv_out, cex = 2)
+fit0 <- rgcca(cv_out)
+rgcca_res_boot$call$blocks[[response]] <-
+  as.matrix(as.factor(rgcca_res_boot$call$blocks[[response]][, 1]))
+colnames(rgcca_res_boot$call$blocks[[response]]) <- 
+  colnames(raw_rgcca$call$blocks[[response]])
+pred_train <- rgcca_predict(res4, blocks_test = training, prediction_model = "lda")
+pred_test <- rgcca_predict(res4, blocks_test = testing, prediction_model = "lda")
+projection <- rgcca_transform(fit0, blocks_test = testing)
+
+# Permutation
+perm_out <- rgcca_permutation(
+  blocks = A,
+  connection = C,
+  par_type = "tau",
+  par_length = 10,
+  n_cores = n_cores,
+  n_perms = 10,
+  n_mark = 20
+)
+summary(perm_out)
+plot(perm_out)
+
+# Plots
+plot(
+  res1,
+  type = "weight",
+  comp = 1,
+  display_order = TRUE,
+  cex = 2,
+  n_mark = 15,
+  var_colors = block_colors,
+  block = 2:4,
+  digits = 2,
+  width_title = 50
+)
+
+plot(
+  res4,
+  block_cor = blocks0[c(3:4)],
+  type = "loadings",
+  comp = 1,
+  block = 1:2,
+  display_blocks = 1:2,
+  cex = 2,
+  var_colors = block_colors[c(2, 3)],
+  var_shapes = 20,
+  n_mark = 15,
+  repel = TRUE,
+  width_text = 50
+)
+fit$AVE
+plot(
+  fit,
+  type = "ave",
+  comp = 1,
+  cex = 2,
+  AVE_colors = brewer.pal(n = 9, name = "Set1")
+)
+fit$Y
+plot(
+    fit,
+    type = "sample",
+    block = 2:3,
+    comp = 1,
+    resp = Y,
+    repel = TRUE,
+    cex = 1,
+    max.overlaps = 50,
+    show_sample_names  = FALSE
+)
+plot(
+    res2,
+    type = "biplot",
+    block = 4,
+    comp = 1:2,
+    repel = TRUE,
+    resp = Y,
+    cex = 2,
+    show_arrow = FALSE,
+    show_sample_names = FALSE,
+    n_mark = 10,
+    sample_shapes = 20,
+    var_shapes = 20,
+    sample_colors = row_col,
+    var_colors = "gray50",
+    force = 100
+)
+
+plot(
+  res2,
+  type = "cor_circle",
+  comp = 1:2,
+  block = 4,
+  display_blocks = 2:3,
+  cex = 2,
+  var_colors = block_colors[c(1, 2)],
+  var_shapes = 20,
+  n_mark = 10,
+  repel = TRUE,
+  force = 100
+)
+
+plot(
+    res4,
+    type = "cor_circle",
+    block = 2,
+    comp = 1:2,
+    cex = 2,
+    var_colors = block_colors[5],
+    var_shapes = 20,
+    n_mark = 5,
+    repel = TRUE,
+    force = 100,
+    display_blocks = 1,
+    block_cor = list( A = blocks0[[3]])
+)
+
+plot(
+    res6,
+    type = "cor_circle",
+    comp = 1:2,
+    block = 2,
+    display_blocks = 1:4,
+    cex = 2,
+    var_colors = get_colors()[c(2, 3, 5, 1)],
+    var_shapes = 20,
+    n_mark = 3,
+    repel = TRUE,
+    force = 1000,
+    block_cor = c(Groups = list(disj), blocks0[2:4]),
+    max.overlaps = 100
+)
+
+plot(
+    res1,
+    type = "cor_circle",
+    comp = 1:2,
+    block = 5,
+    cex = 2,
+    var_colors = get_colors()[c(2, 3, 5, 1)],
+    var_shapes = 20,
+    n_mark = 3,
+    repel = TRUE,
+    width_text = 50,
+    force = 1000
+)
+
+plot(
+    res2,
+    block_cor = c(Group = list(disj), blocks0[c(2:4)]),
+    type = "cor_circle",
+    comp = 1:2,
+    block = 1,
+    display_blocks = 1:4,
+    cex = 2,
+    var_colors = get_colors()[c(2, 3, 5, 1)],
+    var_shapes = 20,
+    n_mark = 5,
+    repel = TRUE,
+    width_text = 50,
+    force = 1000
+)
+
+# Bootstraps
+boot_out0 <- rgcca_bootstrap(res2, n_boot = 500, n_cores = n_cores)
+boot_out <- rgcca_bootstrap(res2, n_boot = 500, n_cores = n_cores, prediction_model = "lda")
+boot_out3 <- rgcca_bootstrap(res4, n_boot = 500, n_cores = n_cores, prediction_model = "lda", block_cor = blocks0[2:4], block = 2)
+summary(boot_out, block = 1:3, ncomp = 1)
+plot(
+    boot_out,
+    type = "weight",
+    block = 2:4,
+    comp = 1,
+    cex = 2,
+    show_stars = FALSE,
+    colors = block_colors[c(2, 3, 1)],
+    width_title = 30,
+    width = 100,
+    n_mark = 20,
+    label_x = "value",
+    colour_text = "gray60"
+)
+plot(
+    boot_out2,
+    type = "loadings",
+    comp = 1,
+    cex = 2,
+    show_stars = FALSE,
+    colors = block_colors[c(2, 3, 1)],
+    width_title = 30,
+    width = 25,
+    n_mark = 5,
+    label_x = "value",
+    colour_text = "gray60",
+    block = 1:3
+)
+# Supervised
+A2 <- c(A, as.data.frame(lab) %>% set_rownames(rownames(A[[1]])) %>% list(Democracy = .))
+n <- length(A2)
+fit2 <- rgcca(
+  blocks = A2,
+  response = n,
+  ncomp = c(rep(ncomp, 3), 1)
+)
+
+# Stability
+fit1 <- rgcca(
+  blocks = blocks,
+  sparsity = c(.2, .2, 0),
+  response = 3,
+  ncomp = ncomp
+)
+fit_stab <- rgcca_stability(
+  fit1,
+  keep = vapply(
+    fit1$a, function(x)
+    mean(x != 0),
+    FUN.VALUE = 1.0
+  ),
+  n_boot = 100,
+  verbose = TRUE,
+  n_cores = n_cores
+)
+summary(fit_stab)
+plot(fit_stab, var_colors = block_colors, type = "loadings")
+```
+
