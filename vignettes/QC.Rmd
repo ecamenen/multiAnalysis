@@ -494,3 +494,145 @@ facs0 <- select(facs0, cells0) %>% remove_constant() -> fact_tot0
 # fact_tot0 <- apply(facs0, 2, function(x) {x[is.na(x)] <- median(x, na.rm = TRUE); x})
 # res_scaled <- scale0(fact_tot0)
 ```
+
+```{r}
+cols <- brewer.pal(n = 11, name = "RdBu")
+cols <- colorRampPalette(cols)(8)
+cols[3:6] <- "white"
+
+c("FAM20A", "RNASE2", "SLC1A3", "KREMEN1", "METTL7B", "ADM", "E2F2", "MMP8", "MKI67", "KIF23", "IQGAP3", "GRB10", "CLSPN", "CD177", "KLRB1", "MYBL1", "SEZ6L", "RAB13") %>% sort() -> vars1
+
+c("HLA-DR+ CD38high CD8+ T Cells in CD8+ T Cells","HLA-DR+ CD38high CD4+ T Cells in CD4+ T Cells", "CD38+ CD8+ T Cells in CD8+ T Cells", "CD38+ CD4+ T Cells in CD4+ T Cells", "HLA-DR+ CD8+ T Cells in CD8+ T Cells", "HLA-DR+ CD4+ T Cells in CD4+ T Cells", "CD86+ CD8+ T Cells in CD8+ T Cells", "BAFF-Rhigh B Cells in B Cells", "NK Cells in Live Cells", "HLA-DR+ NK Cells in NK Cells", "CD38+ NK Cells in NK Cells", "CD38+ Monocytes in Monocytes") -> vars2
+c("IL-1RA", "IL-6", "IL-10", "IL-18", "CXCL9/MIG", "CXCL10/IP-10", "G-CSF") -> vars3
+c("IL-1β", "IL-1RA", "Free IL-18", "Total IL-18", "IL-18BP" ) -> vars4
+c("IL-1RA", "IL-18") -> vars5
+
+# list.map(c("CLSPN", "E2F2", "KIF23", "MKI67"),
+#          f(i) ~{
+# l_blocks <- list(select(blocks[[3]], vars3 %>% .[str_detect(., "(IL-18)|(CXCL)")]),
+l_blocks <- list(select(blocks[[1]], vars1),
+# l_blocks <- list(select(blocks[[2]], vars2 %>% .[str_detect(., "CD8")]),
+                 # select(blocks[[1]], i),
+# l_blocks <- list(select(luminex_geneva, vars4), select(blocks[[3]], vars5),
+                 clinic0  %>% filter(Group == "SD") %>% set_rownames(paste0(rownames(.), "A")))
+l_rownames <- list.map(l_blocks, f(x) ~rownames(x) %>% .[str_detect(., "A")] %>% str_remove_all("A.*")) %>% Reduce(intersect, .)
+x <- l_blocks[[1]][paste0(l_rownames, "A"), , drop = FALSE]  %>% set_colnames(colnames(.) %>% str_remove_all(" in CD8\\+ T Cells"))
+y <- l_blocks[[2]][paste0(l_rownames, "A"), , drop = FALSE]
+
+clinic0 <- pull(clinic1, C_2643_3798) %>% str_replace_all("((Adult)|(Systemic)).*", "SD") %>%
+    str_replace_all(".*control.*", "HV") %>%
+    str_replace_all("^((?!(HV)|(SD)).)*$", "SAID") %>%
+    data.frame(Group = .) %>%
+    set_rownames(pull(clinic1, C_2643_3796) %>% paste0("A"))
+res_scaled <- x %>% select("CD177", "CDC45", "CDCA5", "DTL", "E2F8", "IL1R2", "MCM10", "MKI67", "PKMYT1", "PLIN4", "SLC51A", "ZDHHC19")
+res_scaled_na <- scale0(res_scaled, "minmax")
+split(rownames(y), factor(y[, 1])) %>% lapply(function(i) res_scaled_na[i, ]) %>% Reduce(rbind, .) %>% plot_heatmap(cex= 0.7, colour = colorRampPalette(colors_ind)(100)) + theme(legend.position = "none") + geom_vline(xintercept = c(68, 265+68), lwd = 2, lty = 2, color = "black")
+
+GimmeMyPlot:::plot_cor(
+  x = x,
+  y = y,
+  xlab = "pg\\ml (log10)",
+  legend = "Cytokines",
+  # xlab = "%CD8+ T Cells",
+  # legend = "Cell population",
+  color = get_colors()[c(seq(3), 5)]
+)
+# }) %>% plot_grid(plotlist = ., ncol = 2, nrow = 2, align = "hv")
+
+res <- GimmeMyPlot:::mcor_test(
+    x,
+    x,
+    TRUE,
+    TRUE,
+    method = "spearman",
+    method_adjust = "BH"
+) %>% suppressWarnings()
+mat <- res$estimate
+p_mat = res$p.value
+
+val <- abs(as.vector(mat))
+val <- abs(as.vector(mat[upper.tri(mat)]))
+cols2 <- ifelse(val >= 0.75, "white", ifelse(val >= 0.5, "black",  alpha("white", 0)))
+
+# plot_mcor(x = x, y = y, addCoef.col = cols2, colour = cols)
+plot_mcor(x = x, addCoef.col = cols2, colour = cols, number.cex = 0.75, cex = 0.75)
+abs(res$estimate) %>% apply(1, median) %>% multiply_by(100) %>% plot_bar(label_x = "value")
+#addCoef.col = "black
+# number.cex
+```
+
+```{r}
+power <- c(c(1:10), seq(from = 12, to = 50, by = 2))
+
+sft <- pickSoftThreshold(
+  x,
+  powerVector = power,
+  networkType = "unsigned",
+  verbose = 5
+)
+
+sft.data <- sft$fitIndices
+
+# visualization to pick power
+
+a1 <- ggplot(sft.data, aes(Power, SFT.R.sq, label = Power)) +
+  geom_point() +
+  geom_text(nudge_y = 0.1) +
+  geom_hline(
+    yintercept = 0.8,
+    color = 'red',
+    lwd = 1.25,
+    lty = 2
+  ) +
+  labs(x = 'Power', y = 'Scale free topology model fit, signed R^2') +
+  theme_classic()
+
+
+a2 <- ggplot(sft.data, aes(Power, mean.k., label = Power)) +
+  geom_point() +
+  geom_text(nudge_y = 0.1) +
+  labs(x = 'Power', y = 'Mean Connectivity') +
+  theme_classic()
+
+plot_grid(a1, a2, nrow = 2)
+
+soft_power <- 18
+temp_cor <- cor
+cor <- WGCNA::cor
+
+# memory estimate w.r.t blocksize
+bwnet <- blockwiseModules(
+  x,
+  maxBlockSize = 14000,
+  # TOMType = "signed",
+  # corType = "pearson",
+  power = soft_power,
+  # mergeCutHeight = 0.25,
+  numericLabels = TRUE,
+  randomSeed = 1234,
+  blockSizePenaltyPower = 10
+  verbose = 3
+)
+
+cor <- temp_cor
+module_eigengenes <- bwnet$MEs
+
+# Print out a preview
+head(module_eigengenes)
+
+# get number of genes for each module
+table(bwnet$colors)
+bwnet$colors %>% split(as.factor(.))
+
+plotDendroAndColors(
+  bwnet$dendrograms[[1]],
+  cbind(bwnet$unmergedColors, bwnet$colors),
+  c("unmerged", "merged"),
+  dendroLabels = FALSE,
+  addGuide = TRUE,
+  hang = 0.03,
+  guideHang = 0.05
+)
+
+```
+
