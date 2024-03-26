@@ -168,21 +168,30 @@ get_ctr0 <- function(x) {
 }
 
 #' @export
-plot_alluvial <- function(df, col_stratum = NULL, col_alluvium = NULL, label_stratum = NULL, label = NULL) {
+plot_alluvial <- function(x, col_stratum = NULL, col_alluvium = NULL, label_stratum = NULL, label = NULL) {
+    n <- ncol(x)
     if (is.null(col_stratum)) {
-        col_stratum <- c(rep(get_colors()[seq(2)], 2))
-    }
-    if (is.null(col_alluvium)) {
-        col_alluvium <- c(rep(c(get_colors()[c(2, 4, 8, 1)], "gray40"), 2))
+        col_stratum <- c(rep(get_colors()[seq(n)], n))
+        label_stratum <- lapply(df, function(i) unique(i) %>% sort(decreasing = TRUE) %>% str_replace_all("zz", "NA")) %>% unlist()
     }
     if (is.null(label)) {
-        label <- str_to_title(colnames(df)[seq(2)])
+      col_stratum <- str_to_title(colnames(x)[seq(n)])
     }
-    df <- count(df, pull(df, 1), pull(df, 2))
-    fct_count(pull(df, 1))
-    ggplot(df, aes(y = n, axis1 = pull(df, 1), axis2 = pull(df, 2))) +
-        geom_alluvium(fill = col_alluvium, width = 0.5, knot.pos = 0) +
-        geom_stratum(width = 0.5, fill = col_stratum, color = "grey") +
+    df <- count(x, !!!syms(colnames(x)))
+    # if (is.null(col_alluvium)) {
+    #   col_alluvium <- select(df, -n) %>% lapply(function(i) i %>% factor(labels = levels(as.factor(.)) %>% seq() %>% get_colors()[.]) %>% as.character() %>% replace_na("gray40")) %>% unlist()
+    # }
+
+    df <- sapply(x, function(x) as.character(x)) %>% as.data.frame()
+    df[is.na(df)] <- "zz"
+    df0 <- df %>% mutate(id = rownames(.)) %>% pivot_longer(-id)
+      ggplot(df0, aes(x = name, stratum = value, alluvium = id, fill = value, label = value)) +
+      geom_flow() +
+      geom_stratum(alpha = .5) +
+
+    # ggplot(df, aes(y = n, !!!syms(colnames(x)))) +
+    #     geom_alluvium(aes(fill = !!sym(colnames(x)[1])), width = 0.5, knot.pos = 0) +
+    #     geom_stratum(width = 0.5, fill = col_stratum, color = "grey") +
         geom_text(
             stat = "stratum",
             color = "white",
@@ -193,15 +202,15 @@ plot_alluvial <- function(df, col_stratum = NULL, col_alluvium = NULL, label_str
             limits = label,
             expand = c(.05, .05)
         ) +
-        scale_fill_manual(values = get_colors()[seq(2)]) +
-        scale_y_continuous(
-            breaks = seq(0, 40, 5),
-            minor_breaks = seq(36),
-            sec.axis = sec_axis(trans = ~., name = "n", breaks = seq(0, 40, 5))
-        ) +
+        scale_fill_manual(values = rev(get_colors()[seq(n)])) +
+        # scale_y_continuous(
+        #     breaks = seq(0, 40, 5),
+        #     minor_breaks = seq(40),
+        #     sec.axis = sec_axis(trans = ~., name = "n", breaks = seq(0, 40, 5))
+        # ) +
         labs(y = "n") +
         theme_minimal() +
-        theme(legend.position = "none", axis.ticks.x = element_blank(), panel.grid.major.x = element_blank()) %>%
+        theme(legend.position = "none", axis.ticks.x = element_blank(), panel.grid.major.x = element_blank(), axis.title.x = element_blank()) %>%
         theme_perso0(1.5, show_axis = FALSE)
 }
 
