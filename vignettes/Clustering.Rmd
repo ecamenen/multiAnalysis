@@ -248,8 +248,11 @@ fviz_cluster(
 # Heatmap
 ```{r}
 row_dend <- color_dendrogram(res_clus, k = k, colors = colors_k) %>% sort()
+#     getMeanSilhouettePerPart() %>% which.max()
 row_dend <- color_dendrogram(res_clus, k = 3, colors = colors_k) %>% sort()
 col_dend <- color_dendrogram(res_clus_var, k = 2, colors = c("#f03088", "#d9d52c")) %>% sort()
+
+codes <- attributes(clinic_intersect)$code %>% filter(str_detect(column_code, paste0("^", c("C_2643_3796", "C_2643_3803", "C_2649_3888", "C_2649_3895", "C_2649_3891", "C_2643_3797"), "$", collapse = "|"))) %>% pull(item_name) %>% c("batch") %>% select(clinic_intersect, .) %>% mutate(clinical_center = str_remove_all(clinical_center, "\\d{2} - ") %>% str_remove_all(" \\(.+\\)") %>% str_remove_all(".+ [-–] ")) %>% filter(str_detect(immun_aid_identifier, rownames(res_scaled_na) %>% paste0("^", ., "$", collapse = "|")))
 
 heatmaply(
     res_scaled_na,
@@ -337,6 +340,8 @@ lapply(cou1, function(x) round(x) %>% .[.>= 20])
 sapply(cou, length)
 
 lapply(cou, function(x) lapply(x, function(y) lapply(name_immu, function(x) grepl(x, y, ignore.case = TRUE) %>% any()) %>% as.numeric() %>% as.data.frame()  %>% as.data.frame() )%>% list_cbind()  %>% set_rownames(name_immu)) %>% list_cbind() %>% apply(1, sum) %>% sort(TRUE) %>% .[. != 0] / 15
+
+# list.map(cou, f(i) ~ getDistPerVariable0(res_scaled, cls[[k - 1]]) %>% `/`(100) %>% as.data.frame() %>% select(i) %>% apply(1, mean)) %>% Reduce(rbind, .) %>% set_rownames(names(cou)) %>% round() %>% rbind(N = cou2) %>% kable0()
 
 # Variable contribution
 100 * getCtrVar(k, cls[[k - 1]], res_scaled)
@@ -442,37 +447,46 @@ filter(stats, p <= 0.05) %>% pull(Variables) %>% list.map(f(x, y, z) ~ select(bl
 filter(stats, p <= 0.05) %>% pull(Variables) %>% list.map(f(x) ~ select(blocks, x) %>% mutate(cl = cl) %>% group_by(cl) %>% group_split() %>% as.list() %>% list.map(f(i) ~ pull(i, x)) %>% list_cbind() %>% set_colnames(paste0("G", seq(3))) %>% get_melt() %>% dunn_test(value ~ name, p.adjust.method = "BH") %>% add_xy_position(x = "group"))
 
 fct_count(as.factor(cl))
-cl <- cl[cl != 2]
+cl <- cl[cl %in% c(1, 3)]
 cl0 <- data.frame(cl) %>% rownames_to_column("immun_aid_identifier") %>% mutate(cl = as.character(cl), immun_aid_identifier = as.double(immun_aid_identifier))
 
-blocks00 <- as.data.frame(clinic_transf) # %>% mutate(immun_aid_identifier = rownames(.) %>% as.double())
+blocks00 <- as.data.frame(clinic_transf) %>% mutate(`Age at diagnosis` = interval(birth, date_of_the_first_disease_symptom) / years(1))
+
+# %>% mutate(immun_aid_identifier = rownames(.) %>% as.double())
 
 data("t_biol")
 data("t_general")
 data("t_aidai")
+t_biol0 <- t_biol %>% select(starts_with("V1")) %>% set_colnames(colnames(.) %>% str_remove("V1.")) %>% mutate(immun_aid_identifier = rownames(.) %>% as.double()) %>% select(-c(`Serum peak`, Schizocytes, SAA)) # %>% select(-c("Conjugated bilirubin", "Max CRP", "Triglycerides", "LDH", "Glycosylated ferritin", "Ferritin"))
+t_general0 <- t_general %>% mutate(immun_aid_identifier = rownames(.) %>% as.double()) %>% select(-c("Fever", "Frequency if flares/attacks"))  %>% left_join(select(blocks00, age_at_inclusion_time, `Age at diagnosis`, BMI, immun_aid_identifier)) %>% rename(`Age at inclusion` = age_at_inclusion_time) # %>% select(-c(`In how many months?`, `Weight loss (kg)`))
+t_aidai0 <- t_aidai %>% mutate(`Total score` = rowSums(., na.rm = TRUE)) %>% mutate(immun_aid_identifier = rownames(.) %>% as.double()) %>% select(-c(`Eye manifestations`, `Neurological manifestations`, `Vascular involvement`)) # %>% select(-c("Ear-Nose-Throat symptoms", "Cardiac manifestations", "Painful nodes", "Chest pain", "Headaches", "Diarrhea")) 
+t_cyt0 <- t_cyt %>% mutate(immun_aid_identifier = rownames(.) %>% str_remove_all("A.") %>% as.double()) %>% update_columns(seq(ncol(.)), function(x) as.double(x))
+
+t_all <- list(t_biol0, t_general0, t_aidai0, t_cyt0, t_cyt1) %>% Reduce(function(x, y) full_join(x, y), .) # %>% select( c(vars, "immun_aid_identifier"))
+
 data("t_treat_types")
 data("t_treat_subtypes")
-t_biol0 <- t_biol %>% select(starts_with("V1")) %>% set_colnames(colnames(.) %>% str_remove("V1.")) %>% mutate(immun_aid_identifier = rownames(.) %>% as.double()) %>% select(-c(`Serum peak`, Schizocytes, SAA))
-t_general0 <- t_general %>% mutate(immun_aid_identifier = rownames(.) %>% as.double()) %>% select(-c("Fever", "Frequency if flares/attacks"))  %>% left_join(select(clinic_transf, age_at_inclusion_time, BMI, immun_aid_identifier)) %>% rename(`Age at inclusion time` = age_at_inclusion_time) # %>% select(-c(`In how many months?`, `Weight loss (kg)`))
-t_aidai0 <- t_aidai %>% mutate(`Total score` = rowSums(., na.rm = TRUE)) %>% mutate(immun_aid_identifier = rownames(.) %>% as.double()) %>% select(-c(`Eye manifestations`, `Neurological manifestations`, `Vascular involvement`))
-# t_manif0 <- t_manifs %>% mutate(immun_aid_identifier = rownames(.) %>% as.double()) 
-# t_treat <- left_join(
-#   as.data.frame(t_treat_types) %>% mutate(immun_aid_identifier = rownames(.) %>% as.double()),
-#   as.data.frame(t_treat_subtypes) %>% mutate(immun_aid_identifier = rownames(.) %>% as.double()) %>% rename(`Other biological` = Other)
-# ) %>% update_columns(str_which(colnames(t_treat), "identifier", TRUE), function(x) as.character(x))
-# t_muscu0 <- t_muscu %>% mutate(immun_aid_identifier = rownames(.) %>% as.double()) %>% update_columns(str_which(colnames(t_treat), "identifier", TRUE), function(x) as.character(x))
+data("t_manifs")
+data("t_muscu")
+data("t_muco")
+# t_manif0 <- t_manifs %>% mutate(immun_aid_identifier = rownames(.) %>% as.double())
+t_treat <- left_join(
+  as.data.frame(t_treat_types) %>% mutate(immun_aid_identifier = rownames(.) %>% as.double()),
+  as.data.frame(t_treat_subtypes) %>% mutate(immun_aid_identifier = rownames(.) %>% as.double()) %>% rename(`Other biological` = Other)
+) %>% update_columns(str_which(colnames(.), "identifier", TRUE), function(x) as.character(x))
+t_muscu0 <- t_muscu %>% mutate(immun_aid_identifier = rownames(.) %>% as.double()) %>% update_columns(str_which(colnames(.), "identifier", TRUE), function(x) as.character(x))
 # %>% select(colnames(t_treat_types)[1])
-blocks0 <-  left_join(blocks00, t_biol0) %>% select(colnames(t_biol0))
 
-vars <- c("Neutrophils %", "CRP",  "Leucocytes", "Fatigue", "Dermatological manifestations", "Chest pain")
-t_all <- list(t_biol0, t_general0, t_aidai0) %>% Reduce(function(x, y) left_join(x, y), .) %>% select( c(vars, "immun_aid_identifier"))
+blocks0 <-  select(blocks00, "immun_aid_identifier") %>% full_join(t_general0) %>% select(colnames(t_all))
 
-blocks0 <- as.data.frame(blocks0) %>%
+vars <- c("Physician global assessment", "Max (°C)", "Bone pain", "NK cell", "Neutrophils", "Monocyte non-conventional", "CRP", "IL2", "IFNG")
+# vars <- c("Neutrophils %", "CRP",  "Leucocytes", "Fatigue", "Dermatological manifestations", "Chest pain")
+vars <- c("Neutrophils %", "T cell CD4+ naive", "T cell CD8+ memory", "CRP", "M score", "Fatigue")
+blocks0 <- as.data.frame(t_all) %>%
     right_join(cl0) %>% 
     column_to_rownames("immun_aid_identifier")
 
-stats <- calculate_test1(blocks0, method = "wilcox", stats = TRUE) %>% 
-  arrange(p) %>%
+stats <- calculate_test1(blocks0, method = "wilcox", stats = TRUE) %>%
   filter(p <= 0.2)
 
 pivot_longer(x, !cl) %>%
@@ -499,9 +513,9 @@ colour_var <- colorRampPalette(
   )(nrow(stats))
 
 list.map(
-    colnames(select(blocks0, -cl)) %>% discard(function(x) str_detect(x, "ULN")),
+    # colnames(select(blocks0, -cl)) %>% discard(function(x) str_detect(x, "ULN")),
     # pull(stats, Variables),
-    # vars,
+    vars,
     f(x, y) ~ {
         select(blocks0, c(x, cl)) %>% 
             group_by(cl) %>% 
@@ -509,28 +523,28 @@ list.map(
             as.list() %>% 
             list.map(f(i) ~ pull(i, x)) %>% 
             list_cbind() %>% 
-            set_colnames(paste0("G", seq(length(unique(cl)))))  %>% 
+            set_colnames(paste0("G", seq(length(unique(cl))))) %>% 
             plot_violin0(
                 method = "wilcox",
                 # colour = get_colors()[seq(length(unique(cl)))],
                 # colour = c(colour_var[y], alpha(colour_var[y], 0.5)),
                 colour = brewer.pal(12, "Paired")[4:3],
                 color_title = "black",
-                wrap = 10,
-                wrap_title = 18,
+                wrap = 7,
+                wrap_title = 50,
                 size = 3,
                 pch_colour = "gray50",
                 pch_alpha = 0.5,
                 ylab = "",
-                title = x
+                title = str_remove_all(x, "( (non-)?conventional)|( global)") %>% str_replace_all("Max \\(°C\\)", "Fever")
             ) + theme(axis.title.y = element_blank())
     }
 ) %>%
     plot_grid(
         plotlist = .,
         # align = "hv",
-        nrow = 4,
-        ncol = 8
+        nrow = 3,
+        ncol = 4
     )
 
 
@@ -542,15 +556,15 @@ blocks0 <- left_join(blocks00, select(clinic_transf, c(vars, immun_aid_identifie
     batch = as.factor(batch),
     # age_at_inclusion_time = ifelse(age_at_inclusion_time >= 18, "Adult", "Children")
   )
-blocks0 <- as.data.frame(blocks0) %>%
+blocks0 <- as.data.frame(t_muscu0) %>%
     right_join(cl0) %>% 
     column_to_rownames("immun_aid_identifier")
 blocks0 <- blocks0 %>%
   # filter(!is.na(batch)) %>% 
-  na.omit() %>%
-  # update_columns(seq(ncol(.)), function(x) ifelse(is.na(x), 0, x)) %>%
+  # na.omit() %>%
+  update_columns(seq(ncol(.)), function(x) ifelse(is.na(x), 0, x)) %>%
   remove_constant() %>%
-  # select(update_columns(., seq(ncol(.)), function(x) as.numeric(x)) %>% colSums() %>% `>`(1) %>% which()) %>%
+  select(update_columns(., seq(ncol(.)), function(x) as.numeric(x)) %>% colSums() %>% `>`(1) %>% which()) %>%
   rename(Cluster = cl)
 stats <- chi2_test(pull(blocks0, Cluster), select(blocks0, -Cluster), method = "fisher")
 
@@ -558,7 +572,7 @@ list.map(
   select(blocks0, -Cluster) %>% colnames(),
   f(i) ~ {
     select(blocks0, c(i, Cluster)) %>%
-      chi_plot(method = "fisher", colour1 = c(get_colors()[c(1, 3)], brewer.pal(9, "Pastel1")[c(1, 3)]), title = i, wrap = 15) +
+      chi_plot(method = "fisher", colour1 = c(get_colors()[c(1, 3)], brewer.pal(9, "Pastel1")[c(1, 3)]), title = i, wrap = 50, cex_main = 21, cex_sub = 15, cex = 0.28) +
       theme(
         legend.position = "none",
         axis.title = element_blank(),
