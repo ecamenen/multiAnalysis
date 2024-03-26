@@ -276,13 +276,15 @@ heatmaply(
     # side_color_layers,
 ) %>% layout(xaxis = list(ticklen = 0), yaxis2 = list(ticklen = 0))
 
-row_dend0 <- res_scaled %>%
-    get_dist0(method = hc_metric) %>%
+ind_dist <- res_scaled %>%
+    get_dist0(method = hc_metric)
+row_dend0 <- ind_dist %>%
     hclust(method = hc_method)
 
-col_dend0 <- res_scaled %>%
+col_dist <- res_scaled %>%
     t() %>%
-    get_dist0(method = hc_metric) %>%
+    get_dist0(method = hc_metric)
+col_dend0 <- col_dist %>%
     hclust(method = hc_method)
 
 pheatmap(
@@ -292,7 +294,7 @@ pheatmap(
     na_col = "white",
     annotation_row = row_annotation,
     border_color = NA,
-    annotation_colors = list(Group = row_col),
+    annotation_colors = list(Disease = row_col),
     # annotation_col = my_sample_col,
     cluster_rows = row_dend0,
     cluster_cols = col_dend0,
@@ -320,11 +322,12 @@ heatmap(
 ```{r}
 # plotGapPerPart(gaps, MAX_CLUSTERS)
 plotFusionLevels(MAX_CLUSTERS, row_dend0)
-cl <- getClusterPerPart(MAX_CLUSTERS, col_dend0)[[k -1]]
+cls <- getClusterPerPart(MAX_CLUSTERS, col_dend0)
+get_summary(col_dist, cls, MAX_CLUSTERS, col_dend0, k = k) %>% kable0()
 vars <- list.map(seq(k), f(i) ~ cl[cl == i] %>% names())
 cls <- getClusterPerPart(MAX_CLUSTERS, row_dend0)
-get_summary(res_dist, cls, MAX_CLUSTERS, row_dend0, k = k) %>% round(2) %>% kable0()
-plot_silhouette0(res_dist, cls, k, colors_k = get_colors()[seq(k)])
+get_summary(ind_dist, cls, MAX_CLUSTERS, row_dend0, k = k) %>% kable0()
+plot_silhouette0(res_dist, cls, k, colors_k = get_colors()[c(3, 5)])
 # plot_silhouette0(res_dist, cls, k, colors_k = c(get_colors()[c(5, 3)], alpha("#FF7F00", alpha = 0.5)))
 
 lapply(vars, function(x) get_genes_path(enriched[[2]][[i]][-3], x, detect = "Genes", name = "Term") %>% suppressMessages()) -> cou
@@ -337,10 +340,23 @@ lapply(cou, function(x) lapply(x, function(y) lapply(name_immu, function(x) grep
 
 # Variable contribution
 100 * getCtrVar(k, cls[[k - 1]], res_scaled)
-ctr <- getDiscriminantVariables(k, cls[[k - 1]], res_scaled, ncol(blocks))
+ctr <- getDiscriminantVariables(k, cls[[k - 1]], res_scaled, ncol(res_scaled))
 vars <- head(ctr, 15) %>% rownames()
 # rownames(ctr) <- str_sub(rownames(ctr), 1, 40) %>% to_any_case(unique_sep = NULL, parsing_option = 3)
 plotHistogram(df = ctr, cex = 1.5, dec = 0, ratio = 4, n = 15)
+GimmeMyPlot::plot_bar(
+    select(ctr, 1),
+    n_max = 15,
+    digits = 1,
+    threshold = 0,
+    abs = TRUE,
+    colour = c("#99000D", "gray"),
+    title = ".",
+    label_x = "value",
+    # colour_text = "black",
+    width_text = 25
+)
+# plot_bar(select(ctr, 1), n = 15)
 # round(ctr[, 1, drop = FALSE], 2)
 
 # x = blocks; res = sapply(seq(nrow(x)), function(i) round((length(which(is.na(x[i, ]))) / ncol(x))*100, 1))
