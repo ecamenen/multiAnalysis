@@ -16,11 +16,115 @@ knitr::opts_chunk$set(
 
 # Setup
 ```{r setup}
+set.seed(1)
 library(multiAnalysis)
-set_analysis(block_name = "rna_clinic_still2", type = "list", to_remove = c("1007", "1014", "9001"))
-load_all(path = file.path(golem::get_golem_wd(), "inst", "RGCCA"))
-n <- length(blocks)
+library("RGCCA")
+# set_analysis(block_name = "rna_clinic_still2", type = "list", to_remove = c("1007", "1014", "9001"))
+# load_all(path = file.path(cwd, "inst", "RGCCA"))
+data("luminex") 
+data("facs")
+data("gene_query")
+data("counts_combatseq")
 ncomp <- 2
+n <- 1
+```
+
+# Data preparation
+```{r data}
+# FACS
+lapply(
+    c(
+        "Live Cells",
+        "B Cells",
+        "NK Cells",
+        "T Cells",
+        "Monocytes",
+        "Dendritic Cells",
+        "CD4\\+ T Cells",
+        "CD8\\+ T Cells"
+    ),
+    function(i)
+        colnames(facs) %>%
+        str_extract_all(paste0(".*in ", i)) %>%
+        unlist() %>%
+        purrr:::discard(function(x) str_detect(x, "(^No )|(^Double Negative)|(median)|(iqr)")) %>%
+        sort()
+) %>% unlist() -> cells
+facs <- select(facs, cells) %>% apply(2, function(x) {x[is.na(x)] <- median(x, na.rm = TRUE); x}) %>% as.data.frame()
+
+# Luminex
+luminex <- apply(luminex, 2, function(x) {x[is.na(x)] <- median(x, na.rm = TRUE); x}) %>% as.data.frame()
+colnames(luminex) <- colnames(luminex) %>% str_replace_all("(GROalpha)", "\\1/CXCL1") %>% str_replace_all("al((ph)|(f))a", "\u03b1") %>% str_replace_all("beta", "\u03b2") %>% str_replace_all("gamma", "\u03b3") %>% str_replace_all("lambda", "\u03bb") %>% str_replace_all("_", "/") %>% str_replace_all("(Fractalkine)", "\\1/CX3CL1") %>% str_replace_all("(MDC)", "\\1/CCL22") %>% str_replace_all("(IP-10)", "CXCL10/\\1") %>% str_replace_all("(MCP-1)", "\\1/CCL2") %>% str_replace_all("(IL-28b)-(IFNλ3)", "\\2/\\1") %>% str_replace_all("(IL-37)-(IL-1F7)", "\\1/\\2") %>% str_replace_all("MIG/CXCL9", "CXCL9/MIG")
+luminex <- luminex %>% apply(2, function(x) {x[is.na(x)] <- median(x, na.rm = TRUE); x}) %>% as.data.frame()
+
+# RNA
+counts_combatseq <- rename(counts_combatseq, ensembl_gene_id = gene_id) %>%
+    left_join(gene_query) %>%
+    arrange(hgnc_symbol) %>%
+    data.frame() %>%
+    filter(!str_detect(hgnc_symbol, "^$"))
+gene_hgnc <- pull(counts_combatseq, hgnc_symbol) %>%
+    snakecase::to_any_case(case = "none", sep_in = NULL, unique_sep = "_")
+counts_combatseq <- select(counts_combatseq, -c(ensembl_gene_id, hgnc_symbol)) %>% 
+    set_colnames(colnames(.) %>% str_remove_all("^X")) %>%
+    round() %>%
+    as.matrix() %>% 
+    vst() %>%
+    t() %>% 
+    as.data.frame() %>%
+    set_colnames(gene_hgnc) %>%
+    set_rownames(rownames(.) %>% str_remove_all("\\d{2}PB\\d"))
+
+# gene_hgnc %>% .[str_detect(., "SAA")]  %>% select(counts_combatseq, .) %>% list.map(f(i, j, k) ~plot_violin(i, stats = FALSE, display_log = TRUE, title = k)) %>% plot_grid(plotlist = ., ncol = 5, aligne = "hv")
+```
+
+```{r data}
+# Clinic
+clinic1 <- clinic %>%
+  filter(!str_detect(C_2643_3798, "(suspi)|(angiosarcoma)|(Crohn)")) #%>%
+  # filter(str_detect(C_2643_3798, paste0(dis, "|(Negative)")))
+  # filter(!str_detect(C_2643_3798, "Negative"))
+
+# Blocks
+blocks <- list(RNA = counts_combatseq, Cell = facs, Cytokine = luminex)
+
+l_rownames <- list.map(blocks, f(x) ~rownames(x) %>% .[str_detect(., "A")] %>% str_remove_all("A.*"))
+l_rownames0 <- list.map(l_rownames, f(x) ~ x[as.numeric(x) %in% as.numeric(clinic1$C_2643_3796)])
+# plot_venn(l_rownames, cex = 1.5, label = FALSE)
+# plot_venn(l_rownames0, cex = 1.5, label = FALSE)
+
+common_rows <- Reduce(intersect, l_rownames0)
+
+clinic0 <- filter(clinic1, C_2643_3796 %in% common_rows) %>% 
+  pull(C_2643_3798)
+# clinic0 <- ifelse(str_detect(clinic0, dis), pos, neg) %>%
+clinic0 <- str_replace_all(clinic0, "((Adult)|(Systemic)).*", "SD") %>%
+    str_replace_all(".*control.*", "HV") %>%
+    str_replace_all("^((?!(HV)|(SD)).)*$", "SAID") %>%
+    # str_replace_all("^((?!SD).)*$", "SAID+HV") %>%
+    as.factor() %>%
+    data.frame(Group = .) %>%
+    set_rownames(common_rows)
+  
+blocks0 <- list.map(blocks, f(x) ~ {
+  x %>%
+    filter(str_detect(rownames(.), "A")) %>% 
+    set_rownames(rownames(.) %>% str_remove_all("A")) %>%
+    filter(rownames(.) %in% common_rows)
+  }
+) %>% prepend(list(Group = clinic0))
+
+# blocks0[[2]] <- rename(blocks0[[2]], `EGF ` = EGF)
+data("deg_common")
+blocks0[[2]] <- blocks0[[2]] %>% select(deg_common) # select(c(de_genes0[[1]], "MYBL1", "KLRB1", "SEZ6L", "RAB13"))
+
+blocks0[[n]] <- as.matrix(as.factor(blocks0[[n]][, 1])) %>% set_rownames(rownames(blocks0[[2]])) %>% set_colnames("Group")
+n <- 1
+```
+
+```{r, eval = FALSE}
+data("luminex_geneva")
+
 ```
 
 # Model
