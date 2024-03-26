@@ -92,7 +92,7 @@ save_tiff <- function(f, filename = "violinplot_clin.tiff") {
 }
 
 #' @export
-calculate_test1 <- function(x, method = "kruskal", method_adjust = "BH", dec = 3) {
+calculate_test1 <- function(x, method = "kruskal", method_adjust = "BH", dec = 3, stats = FALSE) {
     df <- pivot_longer(x, !cl) %>%
         group_by(name) %>%
         # filter(!is.na(value)) %>%
@@ -107,6 +107,15 @@ calculate_test1 <- function(x, method = "kruskal", method_adjust = "BH", dec = 3
         mutate(FDR = round(FDR, dec)) %>%
         select(-matches(c("\\.y\\.", "df", "method", "Effect", "p<.05", "ges", "^n(\\d*)?$", "^group"))) %>%
         set_colnames(colnames(.) %>% str_replace("name", "Variables"))
+    if (stats) {
+      df <- pivot_longer(x, !cl) %>%
+        group_by(name, cl) %>%
+        summarize(stat = print_stats0(value)) %>%
+        ungroup() %>%
+        spread(cl, stat) %>%
+        set_colnames(c("Variables", unique(cl) %>% length() %>% seq() %>% paste0("G", .))) %>%
+        left_join(df)
+    }
     if (method == "anova") {
         df <- mutate(df, F = round(F, 1))
     } else {
@@ -128,7 +137,7 @@ calculate_test1 <- function(x, method = "kruskal", method_adjust = "BH", dec = 3
             df <- rename(df, `W` = statistic)
     }
     # %>% str_remove_all(".*signif.*")
-    return(df)
+    return(arrange(df, p))
 }
 
 add_significance0 <- function(x, ns = "", ...) {
@@ -203,18 +212,18 @@ plot_silhouette0 <- function(res_dist, cls, k, cex = 1, colors_k = get_colors()[
 }
 
 #' @export
-get_summary <- function(res_dist, cls, MAX_CLUSTERS, row_dend0 = NULL, k = 2) {
+get_summary <- function(res_dist, cls, MAX_CLUSTERS, row_dend0 = NULL, k = 2, digits = 2) {
     mean_sil <- getSilhouettePerPart(cls, res_dist) %>%
         getMeanSilhouettePerPart()
-    # plotSilhouettePerPart(mean_sil)
+    plotSilhouettePerPart(mean_sil)
     between <- getRelativeBetweenPerPart(MAX_CLUSTERS, res_dist, cls)
     between_diff <- getBetweenDifferences(between)
     # plotBetweenDiff(between_diff)
     summary <- tibble(
         `Number of clusters` = 2:MAX_CLUSTERS,
-        `Between inertia (%)` = between,
-        `Between difference` = between_diff,
-        `Silhouette index` = mean_sil
+        `Between inertia (%)` = round(between, 1),
+        `Between difference` = round(between_diff, digits),
+        `Silhouette index` = round(mean_sil, digits),
     )
     if (!is.null(row_dend0)) {
         height <- rev(row_dend0$height)[seq(MAX_CLUSTERS)]
@@ -222,8 +231,8 @@ get_summary <- function(res_dist, cls, MAX_CLUSTERS, row_dend0 = NULL, k = 2) {
         summary <- cbind(
             summary,
             tibble(
-                `Dendrogram height` = height[-1],
-                `Height difference` = height_diff[-1]
+                `Dendrogram height` = height[-1] %>% format(scientific = FALSE, digits = digits),
+                `Height difference` = height_diff[-1] %>% format(scientific = FALSE, digits = digits)
             )
         ) %>% tibble()
     }
