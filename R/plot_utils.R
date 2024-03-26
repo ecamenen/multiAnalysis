@@ -745,3 +745,29 @@ tree_plot <- function(x, ratio = ratio, wrap = 20, n = 50) {
   #   colours = c(get_colors()[1], "gray50", get_colors()[2])
   # )
 }
+get_ncbi_gene <- function(x) {
+  bitr(x, fromType = "ALIAS", toType = "ENTREZID", OrgDb = get(organism)) %>%
+    pull(ENTREZID) %>%
+    .[1] %>%
+    paste0("https://www.ncbi.nlm.nih.gov/gene/", .) %>%
+    read_html() %>%
+    html_element("#summaryDl") %>%
+    html_text2() %>%
+    str_extract("Summary\n(.*)\n", group = 1) %>%
+    str_trim() %>%
+    str_remove_all("^(T(his)|(he)) ") %>%
+    str_remove_all("^((gene)|(locus)|(protein)) ") %>%
+    str_remove_all("^encode[sd] (a (matrix )?protein )?((which binds)|(that is))?") %>%
+    str_remove_all("^(is) ") %>%
+    str_remove_all("^(a member of )*(the)?") %>%
+    str_remove_all("^((by )?this gene,?) ") %>%
+    str_remove_all("^(that plays a role in) ") %>%
+    str_remove_all("^predicted (to )?") %>%
+    str_remove_all("^(enables?) (to )?") %>%
+    str_remove_all("^(was) ") %>%
+    str_remove_all("^belongs? (to )?") %>%
+    str_remove_all(". \\[.*\\]$") %>%
+    str_trim() %>%
+    GimmeMyPlot:::to_title() %>%
+    paste0(x, ": ", .)
+}
