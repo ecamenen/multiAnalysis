@@ -123,49 +123,118 @@ norm_rna0 <- counts(l_de0[[1]], normalized=TRUE) %>%
     as.matrix()
 ```
 
+# UMAP
 ```{r umap}
-res <- umap(t(norm_rna))
-coord <- trans_coord(res$layout)
+res <- umap(t(norm_rna0))
+coord <- trans_coord(res$layout, add = batch)
 plot_dimred(coord, axis)
 metadata <- rownames_to_column(coord, "ID") %>% 
-  mutate(Sample = str_remove_all(ID, "[AB]")) %>%
-  left_join(clinic, by = "Sample")
+  mutate(Sample = str_remove_all(ID, "[AB].?")) %>%
+  left_join(clinic, by = "Sample") %>%
+  mutate(Group = blocks[[1]]$group)
 
+x <- 1
 p <- list.map(
   c("Gender", "Ethnicity"),
   f(i, j) ~ {
-    select(metadata, c(axis[1], i)) %>% 
+    select(metadata, c(axis[x], i)) %>% 
     filter(!is.na(!!sym(i))) %>% 
     group_by(!!sym(i)) %>%
     group_split() %>%
     as.list() %>%
     list.map(f(i) ~ pull(i, 1)) %>%
-    list_cbind() %>%
+    list_cbind0() %>%
     round() %>%
     set_colnames(unique(pull(metadata, i)) %>% na.omit() %>% sort()) %>%
-    plot_violin0(
-        wrap = 5,
-        wrap_title = 20,
+    plot_violin(
+        method  = "wilcox",
+        width_text = 5,
+        width_title = 20,
         colour = brewer.pal(10, "Paired")[3:4 + 2 * j],
         color_title = brewer.pal(10, "Paired")[4 + 2 * j],
-        stat = TRUE,
+        stats = TRUE,
         title = i
-    )
+    ) +
+      theme(plot.subtitle = element_text(hjust = 0.5, size = 17))
+  }
+)
+
+mod <- lm(`Dim. 1` ~ Gender * Group, data = metadata)
+summary(mod)
+
+p2 <- list.map(
+  c("Gender", "Ethnicity"),
+  f(i, j) ~ {
+    lapply(
+      unique(pull(metadata, i)) %>% na.omit(),
+      function(var) {
+        select(metadata, c(axis[x], i, Group)) %>% 
+        filter(!is.na(!!sym(i))) %>%
+        filter(!!sym(i) == var) %>%
+        group_by(Group) %>%
+        group_split() %>%
+        as.list() %>%
+        list.map(f(i) ~ pull(i, 1)) %>%
+        list_cbind0() %>%
+        round() %>%
+        set_colnames(c("HV", "SD")) %>%
+        plot_violin(
+            method  = "wilcox",
+            width_text = 5,
+            width_title = 20,
+            colour = get_colors()[c(5, 3)],
+            color_title = "black",
+            stats = TRUE,
+            title = var
+        ) +
+          theme(plot.subtitle = element_text(hjust = 0.5, size = 17))
+      }
+    ) %>%
+      plot_grid(
+        plotlist = .,
+        ncol = 2,
+        align = "hv"
+      )
   }
 )
 list.map(
   c("Age", "BMI"),
-  f(x, y) ~ select(metadata, c(axis[1], x)) %>% plot_cor2(color = get_colors()[y + 1], title = x)
+  f(i, j) ~ select(metadata, c(axis[x], i)) %>% plot_cor2(color = get_colors()[j + 1], title = i)
 ) %>% c(p, .) %>%
 plot_grid(
   plotlist = .,
   nrow = 2,
-  ncol = 2,
-  align = "hv"
+  ncol = 2
 )
+
+list.map(
+  c("Age", "Disease duration", "BMI"),
+  f(i, j) ~ {
+    list.map(
+      unique(pull(metadata, "Group")),
+      f(x) ~ {
+    filter(metadata, Group == x) %>%
+      select(c(axis[x], i)) %>% 
+      plot_cor2(color = get_colors()[j + 1], title = x)
+      }
+    ) %>%
+      plot_grid(
+        plotlist = .,
+        ncol = 2,
+        align = "hv"
+      )
+  }
+)
+
+plot_grid(
+  plotlist = .,
+  nrow = 2,
+  ncol = 2
+)
+
 list.map(
   c("Gender", "Ethnicity", "Age", "BMI"),
-  f(var) ~ select(metadata, c(2:3, var)) %>% plot_dimred(axis, legend = var)
+  f(var) ~ select(c(2:3, var)) %>% plot_dimred(axis, legend = var)
 ) %>%
   plot_grid(
   plotlist = .,
@@ -173,6 +242,8 @@ list.map(
   ncol = 2,
   align = "hv"
 )
+
+select(metadata, c(2:3, Group)) %>% mutate(Group = ifelse(Group == 0, "HV", "SD")) %>% plot_dimred(axis, eig = eig, legend = "Group", colour = get_colors()[c(5, 3)]) + theme(legend.position = "none")
 ```
 
 ```{r pca}
